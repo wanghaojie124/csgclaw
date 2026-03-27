@@ -18,6 +18,34 @@ It is not trying to make a single agent do everything. The real problem it tackl
 
 ---
 
+## Quick Start
+
+macOS/Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/OpenCSGs/csgclaw/main/scripts/install.sh | bash
+```
+
+After install:
+
+```bash
+csgclaw onboard --base-url <url> --api-key <key> --model-id <model>
+csgclaw start
+```
+
+The installer downloads a prebuilt release binary from GitHub Releases and places it on your `PATH`. Prebuilt binaries are currently available for macOS arm64 and Linux amd64.
+
+Build from source:
+
+```bash
+export CGO_ENABLED=1
+go mod download
+(cd third_party/boxlite-go && BOXLITE_SDK_VERSION=v0.7.6 go run ./cmd/setup)
+go build ./cmd/csgclaw
+```
+
+---
+
 ## Why CSGClaw Exists
 
 A single agent can already be useful. But in real projects, the limits show up quickly.

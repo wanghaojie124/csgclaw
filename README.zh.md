@@ -18,6 +18,34 @@ CSGClaw 是 OpenCSG 推出的多智能体协作平台。
 
 ---
 
+## 快速开始
+
+macOS / Linux：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/OpenCSGs/csgclaw/main/scripts/install.sh | bash
+```
+
+安装完成后：
+
+```bash
+csgclaw onboard --base-url <url> --api-key <key> --model-id <model>
+csgclaw start
+```
+
+安装脚本会从 GitHub Releases 下载预编译二进制，并把它放到你的 `PATH` 目录中。目前只提供 macOS arm64 和 Linux amd64 的预编译版本。
+
+源码编译：
+
+```bash
+export CGO_ENABLED=1
+go mod download
+(cd third_party/boxlite-go && BOXLITE_SDK_VERSION=v0.7.6 go run ./cmd/setup)
+go build ./cmd/csgclaw
+```
+
+---
+
 ## 为什么要做 CSGClaw
 
 单个 Agent 在很多场景里已经很好用，但只要进入真实项目，问题很快就会出现。

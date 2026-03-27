@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, for example v0.1.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+          - runner: macos-14
+            goos: darwin
+            goarch: arm64
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            version="${{ github.event.inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME}"
+          fi
+          echo "value=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch BoxLite native library
+        shell: bash
+        working-directory: third_party/boxlite-go
+        env:
+          BOXLITE_SDK_VERSION: v0.7.6
+        run: go run ./cmd/setup
+
+      - name: Package release archive
+        shell: bash
+        run: |
+          chmod +x scripts/package-release.sh
+          VERSION="${{ steps.version.outputs.value }}" \
+          DIST_DIR=dist \
+          APP=csgclaw \
+          GOCACHE="${{ github.workspace }}/.gocache" \
+          CGO_ENABLED=1 \
+          ./scripts/package-release.sh "${{ matrix.goos }}" "${{ matrix.goarch }}"
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.value }}
+          files: dist/*

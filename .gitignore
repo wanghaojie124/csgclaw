@@ -1,0 +1,21 @@
+.DS_Store
+
+# Go build/test artifacts
+.gocache/
+bin/
+dist/
+*.test
+*.out
+
+# Local binaries
+/csgclaw
+
+# Local runtime data
+manager-data/
+
+# Editor directories
+.idea/
+.vscode/
+
+# Vendored native libraries fetched on demand
+third_party/boxlite-go/libboxlite.a

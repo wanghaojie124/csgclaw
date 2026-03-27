@@ -1,0 +1,973 @@
+import React, { useEffect, useMemo, useRef, useState } from "https://esm.sh/react@18.3.1";
+import { createRoot } from "https://esm.sh/react-dom@18.3.1/client";
+import htm from "https://esm.sh/htm@3.1.1";
+import { marked } from "https://esm.sh/marked@13.0.2";
+import DOMPurify from "https://esm.sh/dompurify@3.1.6";
+import mermaid from "https://esm.sh/mermaid@11.4.1";
+
+const html = htm.bind(React.createElement);
+const LOCALE_STORAGE_KEY = "csgclaw.im.locale";
+
+marked.setOptions({
+  gfm: true,
+  breaks: true,
+});
+
+mermaid.initialize({
+  startOnLoad: false,
+  securityLevel: "strict",
+  theme: "neutral",
+});
+
+const messages = {
+  zh: {
+    pageTitle: "CSGClaw IM",
+    loading: "正在加载 IM 工作区...",
+    loadingFailed: "加载失败，请稍后重试。",
+    emptyConversation: "请选择一个会话",
+    conversationSection: "会话",
+    yourView: "你的视图",
+    activeNow: "当前在线",
+    totalThreads: "会话总数",
+    teamMembers: "团队成员",
+    membersTitle: "成员",
+    conversationOverview: "会话概览",
+    sendFailed: "消息发送失败，请重试。",
+    roomCreatedToast: "Room 已创建",
+    inviteSentToast: "邀请已发送",
+    noMessages: "还没有消息，发一条开始吧。",
+    createRoom: "新建会话",
+    conversationLabel: "会话",
+    participants: "成员",
+    mentionBadge: "@ 提及",
+    inviteMembers: "邀请成员",
+    inputPlaceholder: "输入消息，使用 @ 调出成员建议",
+    send: "发送",
+    composerTip: "Enter 发送，Shift + Enter 换行。支持多人会话、双人会话和 @ 提及。",
+    createRoomTitle: "创建会话",
+    createRoomSubtitle: "为一个新主题建立会话，并预先邀请成员。",
+    close: "关闭",
+    roomName: "标题",
+    roomNamePlaceholder: "例如：Launch War Room",
+    roomDescription: "说明",
+    roomDescriptionPlaceholder: "简单说明这个会话的用途",
+    initialMembers: "初始成员",
+    cancel: "取消",
+    create: "创建",
+    inviteTitle: "添加成员",
+    inviteSubtitle: "将更多成员加入当前会话。",
+    inviteCandidates: "可选成员",
+    noInviteCandidates: "当前没有可新增的成员。",
+    sendInvite: "发送邀请",
+    languageSwitcher: "切换语言",
+    languageOptionZh: "简体中文",
+    languageOptionEn: "English",
+    online: "在线",
+    offline: "离线",
+    justNow: "刚刚",
+    minutesAgo: "{count} 分钟前",
+    roomMembers: "{count} 名成员",
+    roles: {
+      Admin: "管理员",
+      Manager: "经理",
+      Product: "产品",
+      Design: "设计",
+      Backend: "后端",
+      Ops: "运维",
+    },
+    errors: {
+      "title is required": "标题不能为空",
+      "creator_id is required": "缺少创建者",
+      "creator not found": "创建者不存在",
+      "user not found": "用户不存在",
+      "conversation_id is required": "缺少会话 ID",
+      "conversation not found": "会话不存在",
+      "inviter_id is required": "缺少邀请者",
+      "inviter not found": "邀请者不存在",
+      "inviter is not a conversation member": "邀请者不在当前会话中",
+      "user_ids is required": "请选择至少一位成员",
+      "no new users to invite": "没有可新增的成员",
+    },
+  },
+  en: {
+    pageTitle: "CSGClaw IM",
+    loading: "Loading IM workspace...",
+    loadingFailed: "Failed to load the workspace. Please try again.",
+    emptyConversation: "Select a conversation",
+    conversationSection: "Conversations",
+    yourView: "Your view",
+    activeNow: "Active now",
+    totalThreads: "Threads",
+    teamMembers: "Members",
+    membersTitle: "Members",
+    conversationOverview: "Conversation overview",
+    sendFailed: "Failed to send the message. Please retry.",
+    roomCreatedToast: "Room created",
+    inviteSentToast: "Invite sent",
+    noMessages: "No messages yet. Start the conversation.",
+    createRoom: "New Chat",
+    conversationLabel: "Conversation",
+    participants: "participants",
+    mentionBadge: "@ mention",
+    inviteMembers: "Invite Members",
+    inputPlaceholder: "Type a message and use @ to mention members",
+    send: "Send",
+    composerTip: "Press Enter to send and Shift + Enter for a new line. Supports group chats, 1:1 chats, and @ mentions.",
+    createRoomTitle: "Create Conversation",
+    createRoomSubtitle: "Create a new conversation and invite members in advance.",
+    close: "Close",
+    roomName: "Title",
+    roomNamePlaceholder: "For example: Launch War Room",
+    roomDescription: "Details",
+    roomDescriptionPlaceholder: "Briefly describe what this conversation is for",
+    initialMembers: "Initial Members",
+    cancel: "Cancel",
+    create: "Create",
+    inviteTitle: "Add Members",
+    inviteSubtitle: "Add more members to the current conversation.",
+    inviteCandidates: "Available Members",
+    noInviteCandidates: "There are no additional members to invite.",
+    sendInvite: "Send Invite",
+    languageSwitcher: "Switch language",
+    languageOptionZh: "简体中文",
+    languageOptionEn: "English",
+    online: "online",
+    offline: "offline",
+    justNow: "just now",
+    minutesAgo: "{count} min ago",
+    roomMembers: "{count} members",
+    roles: {
+      Admin: "Admin",
+      Manager: "Manager",
+      Product: "Product",
+      Design: "Design",
+      Backend: "Backend",
+      Ops: "Ops",
+    },
+    errors: {
+      "title is required": "Title is required",
+      "creator_id is required": "Creator is required",
+      "creator not found": "Creator not found",
+      "user not found": "User not found",
+      "conversation_id is required": "Conversation ID is required",
+      "conversation not found": "Conversation not found",
+      "inviter_id is required": "Inviter is required",
+      "inviter not found": "Inviter not found",
+      "inviter is not a conversation member": "Inviter is not a conversation member",
+      "user_ids is required": "Select at least one member",
+      "no new users to invite": "There are no new users to invite",
+    },
+  },
+};
+
+function GlobeIcon() {
+  return html`
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M12 3.25a8.75 8.75 0 1 0 0 17.5a8.75 8.75 0 0 0 0-17.5Zm5.99 7.97h-2.56a14.57 14.57 0 0 0-1.13-4.01a7.28 7.28 0 0 1 3.69 4.01Zm-5.24-4.47c.52.76 1.16 2.28 1.51 4.47h-4.52c.35-2.19.99-3.71 1.51-4.47c.22-.32.42-.5.5-.5s.28.18.5.5Zm-4.05.46a14.57 14.57 0 0 0-1.13 4.01H4.01A7.28 7.28 0 0 1 7.7 7.21Zm-4.19 5.51h2.81c.03 1.48.24 2.88.57 4.01H5.37a7.22 7.22 0 0 1-.86-4.01Zm3.89 0h4.72c-.04 1.4-.24 2.79-.62 4.01H9.02a17.18 17.18 0 0 1-.62-4.01Zm.87 5.51h3.46c-.27.69-.59 1.3-.95 1.83c-.29.42-.54.69-.68.69s-.39-.27-.68-.69a9.65 9.65 0 0 1-.95-1.83Zm4.95-1.5c.33-1.13.54-2.53.57-4.01h2.81a7.22 7.22 0 0 1-.86 4.01h-2.52Z"
+        fill="currentColor"
+      />
+    </svg>
+  `;
+}
+
+function MessageContent({ content }) {
+  const containerRef = useRef(null);
+  const markup = useMemo(() => renderMarkdown(content), [content]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const mermaidBlocks = container.querySelectorAll("pre > code.language-mermaid");
+    mermaidBlocks.forEach((code, index) => {
+      const pre = code.parentElement;
+      if (!pre || pre.dataset.enhanced === "true") {
+        return;
+      }
+      const wrapper = document.createElement("div");
+      wrapper.className = "mermaid";
+      wrapper.textContent = code.textContent ?? "";
+      wrapper.dataset.blockId = `${Date.now()}-${index}`;
+      pre.replaceWith(wrapper);
+    });
+
+    const diagrams = container.querySelectorAll(".mermaid");
+    if (diagrams.length > 0) {
+      mermaid.run({ nodes: diagrams });
+    }
+  }, [markup]);
+
+  return html`<div ref=${containerRef} className="message-content" dangerouslySetInnerHTML=${{ __html: markup }} />`;
+}
+
+function AddUserIcon() {
+  return html`
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M15 19c0-2.761-2.239-5-5-5s-5 2.239-5 5"
+        fill="none"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="1.8"
+      />
+      <circle
+        cx="10"
+        cy="7.5"
+        r="3.5"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+      />
+      <path
+        d="M18 8v6M15 11h6"
+        fill="none"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-width="1.8"
+      />
+    </svg>
+  `;
+}
+
+function UsersIcon() {
+  return html`
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M9 11a4 4 0 1 0 0-8a4 4 0 0 0 0 8Zm7 1a3 3 0 1 0 0-6a3 3 0 0 0 0 6Zm-7 2c-3.314 0-6 1.79-6 4c0 .552.448 1 1 1h10a1 1 0 0 0 1-1c0-2.21-2.686-4-6-4Zm7 1c-.758 0-1.483.11-2.147.312c1.16.87 1.956 2.035 2.118 3.358A1 1 0 0 0 16.964 19H20a1 1 0 0 0 1-1c0-1.657-2.239-3-5-3Z"
+        fill="currentColor"
+      />
+    </svg>
+  `;
+}
+
+function App() {
+  const [locale, setLocale] = useState(() => detectInitialLocale());
+  const [data, setData] = useState(null);
+  const [activeConversationId, setActiveConversationId] = useState("");
+  const [draft, setDraft] = useState("");
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [showCreateRoom, setShowCreateRoom] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+  const [roomTitle, setRoomTitle] = useState("");
+  const [roomDescription, setRoomDescription] = useState("");
+  const [roomMemberIDs, setRoomMemberIDs] = useState([]);
+  const [inviteUserIDs, setInviteUserIDs] = useState([]);
+  const [submitError, setSubmitError] = useState("");
+  const [composerError, setComposerError] = useState("");
+  const [loadingError, setLoadingError] = useState("");
+  const textareaRef = useRef(null);
+  const messageListRef = useRef(null);
+
+  useEffect(() => {
+    fetch("/api/v1/im/bootstrap")
+      .then((resp) => resp.json())
+      .then((payload) => {
+        setData(payload);
+        setLoadingError("");
+        setInviteUserIDs([]);
+        if (payload.conversations.length > 0) {
+          setActiveConversationId(payload.conversations[0].id);
+        }
+      })
+      .catch(() => setLoadingError(messages[locale].loadingFailed));
+  }, []);
+
+  useEffect(() => {
+    const source = new EventSource("/api/v1/im/events");
+
+    source.onmessage = (event) => {
+      const payload = JSON.parse(event.data);
+      setData((current) => applyIMEvent(current, payload));
+    };
+
+    return () => source.close();
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.lang = locale === "zh" ? "zh-CN" : "en";
+    document.title = messages[locale].pageTitle;
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+  }, [locale]);
+
+  const t = useMemo(() => createTranslator(locale), [locale]);
+
+  const usersById = useMemo(() => {
+    const result = new Map();
+    data?.users.forEach((user) => result.set(user.id, user));
+    return result;
+  }, [data]);
+
+  const activeConversation = useMemo(
+    () => data?.conversations.find((item) => item.id === activeConversationId) ?? null,
+    [data, activeConversationId],
+  );
+
+  const conversations = useMemo(
+    () => data?.conversations ?? [],
+    [data],
+  );
+
+  const onlineCount = useMemo(
+    () => data?.users.filter((user) => user.is_online).length ?? 0,
+    [data],
+  );
+
+  const activeConversationOnlineCount = useMemo(
+    () => (activeConversation?.participants ?? [])
+      .map((id) => usersById.get(id))
+      .filter((user) => user?.is_online).length,
+    [activeConversation, usersById],
+  );
+
+  const mentionState = useMemo(() => getMentionState(draft, textareaRef.current), [draft]);
+  const mentionCandidates = useMemo(() => {
+    if (!data || !mentionState) {
+      return [];
+    }
+    const allowed = new Set(activeConversation?.participants ?? []);
+    return data.users
+      .filter((user) => allowed.has(user.id))
+      .filter((user) => user.handle.toLowerCase().includes(mentionState.query.toLowerCase()) || user.name.toLowerCase().includes(mentionState.query.toLowerCase()))
+      .slice(0, 5);
+  }, [data, activeConversation, mentionState]);
+
+  useEffect(() => {
+    setMentionIndex(0);
+  }, [activeConversationId, draft]);
+
+  useEffect(() => {
+    if (!showCreateRoom) {
+      setRoomTitle("");
+      setRoomDescription("");
+      setRoomMemberIDs([]);
+      setSubmitError("");
+    }
+  }, [showCreateRoom]);
+
+  useEffect(() => {
+    if (!showInvite) {
+      setInviteUserIDs([]);
+      setSubmitError("");
+    }
+  }, [showInvite]);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) {
+      return;
+    }
+    el.style.height = "0px";
+    el.style.height = `${Math.min(el.scrollHeight, 168)}px`;
+  }, [draft]);
+
+  useEffect(() => {
+    const el = messageListRef.current;
+    if (!el) {
+      return;
+    }
+    el.scrollTop = el.scrollHeight;
+  }, [activeConversationId, activeConversation?.messages.length]);
+
+  async function sendMessage() {
+    if (!data || !activeConversation || !draft.trim()) {
+      return;
+    }
+
+    setComposerError("");
+    const resp = await fetch("/api/v1/im/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        conversation_id: activeConversation.id,
+        sender_id: data.current_user_id,
+        content: draft,
+      }),
+    });
+    if (!resp.ok) {
+      setComposerError(t("sendFailed"));
+      return;
+    }
+    const created = await resp.json();
+    setData((current) => appendMessageToData(current, activeConversation.id, created));
+    setDraft("");
+  }
+
+  async function createRoom() {
+    if (!data || !roomTitle.trim()) {
+      return;
+    }
+
+    setSubmitError("");
+    const resp = await fetch("/api/v1/im/conversations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: roomTitle,
+        description: roomDescription,
+        creator_id: data.current_user_id,
+        participant_ids: roomMemberIDs,
+        locale,
+      }),
+    });
+    if (!resp.ok) {
+      setSubmitError(localizeError(await resp.text(), t));
+      return;
+    }
+
+    const created = await resp.json();
+    setData((current) => upsertConversationInData(current, created));
+    setActiveConversationId(created.id);
+    setComposerError("");
+    setShowCreateRoom(false);
+  }
+
+  async function inviteUsers() {
+    if (!data || !activeConversation || inviteUserIDs.length === 0) {
+      return;
+    }
+
+    setSubmitError("");
+    const resp = await fetch("/api/v1/im/conversations/members", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        conversation_id: activeConversation.id,
+        inviter_id: data.current_user_id,
+        user_ids: inviteUserIDs,
+        locale,
+      }),
+    });
+    if (!resp.ok) {
+      setSubmitError(localizeError(await resp.text(), t));
+      return;
+    }
+
+    const updated = await resp.json();
+    setData((current) => upsertConversationInData(current, updated));
+    setComposerError("");
+    setShowInvite(false);
+  }
+
+  function applyMention(user) {
+    const state = getMentionState(draft, textareaRef.current);
+    if (!state) {
+      return;
+    }
+    const next = `${draft.slice(0, state.start)}@${user.handle} ${draft.slice(state.end)}`;
+    setDraft(next);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      const pos = state.start + user.handle.length + 2;
+      el.focus();
+      el.setSelectionRange(pos, pos);
+    });
+  }
+
+  function onComposerKeyDown(event) {
+    if (mentionCandidates.length > 0) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setMentionIndex((value) => (value + 1) % mentionCandidates.length);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setMentionIndex((value) => (value - 1 + mentionCandidates.length) % mentionCandidates.length);
+        return;
+      }
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        applyMention(mentionCandidates[mentionIndex]);
+        return;
+      }
+    }
+
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      sendMessage();
+    }
+  }
+
+  if (!data) {
+    return html`<div className="empty-state">${loadingError || t("loading")}</div>`;
+  }
+
+  const createRoomCandidates = data.users.filter((user) => user.id !== data.current_user_id);
+  const inviteCandidates = activeConversation
+    ? data.users.filter((user) => !activeConversation.participants.includes(user.id))
+    : [];
+  return html`
+    <${React.Fragment}>
+      <div className="app-shell">
+        <aside className="sidebar">
+          <div className="sidebar-header">
+            <div className="sidebar-brand-row">
+              <div className="sidebar-brand">CSGClaw</div>
+              <div className="language-switch" role="group" aria-label=${t("languageSwitcher")}>
+                <span className="language-switch-icon" aria-hidden="true"><${GlobeIcon} /></span>
+                <div className=${`language-switch-track ${locale === "en" ? "is-en" : "is-zh"}`}>
+                  <span className="language-switch-thumb" aria-hidden="true"></span>
+                  <button
+                    className=${`language-toggle ${locale === "zh" ? "active" : ""}`}
+                    aria-pressed=${locale === "zh"}
+                    title=${t("languageOptionZh")}
+                    onClick=${() => setLocale("zh")}
+                  >
+                    中
+                  </button>
+                  <button
+                    className=${`language-toggle ${locale === "en" ? "active" : ""}`}
+                    aria-pressed=${locale === "en"}
+                    title=${t("languageOptionEn")}
+                    onClick=${() => setLocale("en")}
+                  >
+                    EN
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="sidebar-header-row">
+              <div className="header-toolbar">
+                <button
+                  className="header-create-button"
+                  aria-label=${t("createRoom")}
+                  title=${t("createRoom")}
+                  onClick=${() => setShowCreateRoom(true)}
+                >
+                  +
+                </button>
+              </div>
+            </div>
+            <div className="sidebar-stats" aria-label=${t("yourView")}>
+              <div className="stat-pill">
+                <span className="section-label">${t("activeNow")}</span>
+                <strong>${onlineCount}</strong>
+              </div>
+              <div className="stat-pill">
+                <span className="section-label">${t("totalThreads")}</span>
+                <strong>${data.conversations.length}</strong>
+              </div>
+              <div className="stat-pill">
+                <span className="section-label">${t("teamMembers")}</span>
+                <strong>${data.users.length}</strong>
+              </div>
+            </div>
+          </div>
+          <div className="conversation-list">
+            <${ConversationSection}
+              title=${t("conversationSection")}
+              items=${conversations}
+              activeConversationId=${activeConversationId}
+              currentUserID=${data.current_user_id}
+              usersById=${usersById}
+              locale=${locale}
+              t=${t}
+              onSelect=${setActiveConversationId}
+            />
+          </div>
+        </aside>
+
+        <main className="chat-panel">
+          ${activeConversation
+            ? html`
+                <header className="chat-header">
+                  <div className="chat-header-main">
+                    <div className="chat-title-bar">
+                      <div className="chat-title-row">
+                        <div className="chat-title truncate">${activeConversation.title}</div>
+                        <div className="title-badge" title=${t("roomMembers", { count: activeConversation.participants.length })}>
+                          <span className="title-badge-icon"><${UsersIcon} /></span>
+                          <span>${activeConversation.participants.length}</span>
+                        </div>
+                        <div className="title-badge" title=${activeConversationOnlineCount.toString()}>
+                          <span className="status-dot" aria-hidden="true"></span>
+                          <span>${activeConversationOnlineCount}</span>
+                        </div>
+                      </div>
+                      <button
+                        className="icon-button"
+                        aria-label=${t("inviteMembers")}
+                        title=${t("inviteMembers")}
+                        onClick=${() => setShowInvite(true)}
+                      >
+                        <span className="icon-button-mark"><${AddUserIcon} /></span>
+                      </button>
+                    </div>
+                    ${getConversationDescription(activeConversation, data.current_user_id, usersById, locale, t)
+                      ? html`<div className="chat-subtitle">${getConversationDescription(activeConversation, data.current_user_id, usersById, locale, t)}</div>`
+                      : null}
+                  </div>
+                </header>
+
+                <section ref=${messageListRef} className="messages">
+                  ${activeConversation.messages.length === 0
+                    ? html`<div className="messages-empty">${t("noMessages")}</div>`
+                    : null}
+                  ${activeConversation.messages.map((message) => {
+                    const user = usersById.get(message.sender_id);
+                    const own = message.sender_id === data.current_user_id;
+                    return html`
+                      <div key=${message.id} className=${`message-row ${own ? "own" : ""}`}>
+                        <div className="avatar" style=${{ background: `linear-gradient(135deg, ${user.accent_hex}, #10233f)` }}>${user.avatar}</div>
+                        <div className="message-card">
+                          <div className="message-meta">
+                            <span className="message-author">${user.name}</span>
+                            <span>${formatTime(message.created_at, locale)}</span>
+                          </div>
+                          <div className="message-bubble"><${MessageContent} content=${message.content} /></div>
+                        </div>
+                      </div>
+                    `;
+                  })}
+                </section>
+
+                <footer className="composer">
+                  ${mentionCandidates.length > 0
+                    ? html`
+                        <div className="mention-picker">
+                          ${mentionCandidates.map((user, index) => html`
+                            <button
+                              key=${user.id}
+                              className=${`mention-option ${index === mentionIndex ? "active" : ""}`}
+                              onMouseDown=${(event) => {
+                                event.preventDefault();
+                                applyMention(user);
+                              }}
+                            >
+                              <div className="avatar" style=${{ background: `linear-gradient(135deg, ${user.accent_hex}, #10233f)` }}>${user.avatar}</div>
+                              <div>
+                                <div className="message-author">${user.name}</div>
+                                <div className="conversation-preview">@${user.handle} · ${localizeRole(user.role, t)}</div>
+                              </div>
+                            </button>
+                          `)}
+                        </div>
+                      `
+                    : null}
+                  <div className="composer-box">
+                    <textarea
+                      ref=${textareaRef}
+                      value=${draft}
+                      placeholder=${t("inputPlaceholder")}
+                      onInput=${(event) => setDraft(event.target.value)}
+                      onKeyDown=${onComposerKeyDown}
+                    />
+                    <button className="send-button" disabled=${!draft.trim()} onClick=${sendMessage}>${t("send")}</button>
+                  </div>
+                  ${composerError ? html`<div className="form-error composer-error">${composerError}</div>` : null}
+                  <div className="composer-tip">${t("composerTip")}</div>
+                </footer>
+              `
+            : html`<div className="empty-state">${t("emptyConversation")}</div>`}
+        </main>
+      </div>
+
+      ${showCreateRoom
+        ? html`
+            <div className="modal-backdrop" onClick=${() => setShowCreateRoom(false)}>
+              <div className="modal-card" onClick=${(event) => event.stopPropagation()}>
+                <div className="modal-header">
+                  <div>
+                    <div className="modal-title">${t("createRoomTitle")}</div>
+                    <div className="modal-subtitle">${t("createRoomSubtitle")}</div>
+                  </div>
+                  <button className="modal-close" onClick=${() => setShowCreateRoom(false)}>${t("close")}</button>
+                </div>
+                <label className="field">
+                  <span>${t("roomName")}</span>
+                  <input value=${roomTitle} onInput=${(event) => setRoomTitle(event.target.value)} placeholder=${t("roomNamePlaceholder")} />
+                </label>
+                <label className="field">
+                  <span>${t("roomDescription")}</span>
+                  <textarea value=${roomDescription} onInput=${(event) => setRoomDescription(event.target.value)} placeholder=${t("roomDescriptionPlaceholder")} />
+                </label>
+                <div className="field">
+                  <span>${t("initialMembers")}</span>
+                  <div className="selection-list">
+                    ${createRoomCandidates.map((user) => html`
+                      <label key=${user.id} className="selection-item">
+                        <input
+                          type="checkbox"
+                          checked=${roomMemberIDs.includes(user.id)}
+                          onChange=${() => setRoomMemberIDs((current) => toggleSelection(current, user.id))}
+                        />
+                        <span>${user.name}</span>
+                        <small>@${user.handle}</small>
+                      </label>
+                    `)}
+                  </div>
+                </div>
+                ${submitError ? html`<div className="form-error">${submitError}</div>` : null}
+                <div className="modal-actions">
+                  <button className="secondary-button" onClick=${() => setShowCreateRoom(false)}>${t("cancel")}</button>
+                  <button className="send-button" disabled=${!roomTitle.trim()} onClick=${createRoom}>${t("create")}</button>
+                </div>
+              </div>
+            </div>
+          `
+        : null}
+
+      ${showInvite
+        ? html`
+            <div className="modal-backdrop" onClick=${() => setShowInvite(false)}>
+              <div className="modal-card" onClick=${(event) => event.stopPropagation()}>
+                <div className="modal-header">
+                  <div>
+                    <div className="modal-title">${t("inviteTitle")}</div>
+                    <div className="modal-subtitle">${t("inviteSubtitle")}</div>
+                  </div>
+                  <button className="modal-close" onClick=${() => setShowInvite(false)}>${t("close")}</button>
+                </div>
+                <div className="field">
+                  <span>${t("inviteCandidates")}</span>
+                  <div className="selection-list">
+                    ${inviteCandidates.length > 0
+                      ? inviteCandidates.map((user) => html`
+                          <label key=${user.id} className="selection-item">
+                            <input
+                              type="checkbox"
+                              checked=${inviteUserIDs.includes(user.id)}
+                              onChange=${() => setInviteUserIDs((current) => toggleSelection(current, user.id))}
+                            />
+                            <span>${user.name}</span>
+                            <small>@${user.handle}</small>
+                          </label>
+                        `)
+                      : html`<div className="selection-empty">${t("noInviteCandidates")}</div>`}
+                  </div>
+                </div>
+                ${submitError ? html`<div className="form-error">${submitError}</div>` : null}
+                <div className="modal-actions">
+                  <button className="secondary-button" onClick=${() => setShowInvite(false)}>${t("cancel")}</button>
+                  <button className="send-button" disabled=${inviteUserIDs.length === 0} onClick=${inviteUsers}>${t("sendInvite")}</button>
+                </div>
+              </div>
+            </div>
+          `
+        : null}
+    <//>
+  `;
+}
+
+function ConversationSection({ title, items, activeConversationId, currentUserID, usersById, locale, t, onSelect }) {
+  if (!items.length) {
+    return null;
+  }
+
+  return html`
+    <section className="conversation-section">
+      <div className="conversation-section-title">${title}</div>
+      ${items.map((conversation) => {
+        const lastMessage = conversation.messages[conversation.messages.length - 1];
+        const displayUser = resolveConversationUser(conversation, currentUserID, usersById);
+        const avatar = isTwoPersonConversation(conversation) && displayUser
+          ? displayUser.avatar
+          : conversation.title.slice(0, 2).toUpperCase();
+        const color = isTwoPersonConversation(conversation) && displayUser
+          ? displayUser.accent_hex
+          : "#2563eb";
+        return html`
+          <button
+            key=${conversation.id}
+            className=${`conversation-item ${conversation.id === activeConversationId ? "active" : ""}`}
+            onClick=${() => onSelect(conversation.id)}
+          >
+            <div className="avatar" style=${{ background: `linear-gradient(135deg, ${color}, #10233f)` }}>${avatar}</div>
+            <div className="conversation-main">
+              <div className="conversation-head">
+                <div className="conversation-name truncate">${conversation.title}</div>
+                <div className="section-label">${formatTime(lastMessage?.created_at, locale)}</div>
+              </div>
+              <div className="conversation-preview truncate">
+                ${lastMessage?.content ?? getConversationSubtitle(conversation, currentUserID, usersById, locale, t)}
+              </div>
+            </div>
+          </button>
+        `;
+      })}
+    </section>
+  `;
+}
+
+function detectInitialLocale() {
+  const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+  if (stored === "zh" || stored === "en") {
+    return stored;
+  }
+  return navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en";
+}
+
+function createTranslator(locale) {
+  return (key, params = {}) => {
+    const value = resolveTranslation(locale, key);
+    if (typeof value !== "string") {
+      return key;
+    }
+    return value.replace(/\{(\w+)\}/g, (_, name) => `${params[name] ?? ""}`);
+  };
+}
+
+function resolveTranslation(locale, key) {
+  return key.split(".").reduce((current, part) => current?.[part], messages[locale]);
+}
+
+function localizeRole(role, t) {
+  return t(`roles.${role}`) === `roles.${role}` ? role : t(`roles.${role}`);
+}
+
+function localizeError(raw, t) {
+  const cleaned = raw.trim();
+  for (const key of Object.keys(messages.zh.errors)) {
+    if (cleaned.includes(key)) {
+      return t(`errors.${key}`);
+    }
+    const englishValue = messages.en.errors[key];
+    if (englishValue && cleaned.includes(englishValue)) {
+      return t(`errors.${key}`);
+    }
+    const prefix = `${key}:`;
+    if (cleaned.startsWith(prefix)) {
+      const suffix = cleaned.slice(prefix.length).trim();
+      return `${t(`errors.${key}`)} ${suffix}`;
+    }
+  }
+  return cleaned;
+}
+
+function getMentionState(text, textarea) {
+  const cursor = textarea?.selectionStart ?? text.length;
+  const before = text.slice(0, cursor);
+  const match = before.match(/(^|\s)@([a-zA-Z0-9._-]*)$/);
+  if (!match) return null;
+  return {
+    query: match[2],
+    start: cursor - match[2].length - 1,
+    end: cursor,
+  };
+}
+
+function resolveConversationUser(conversation, currentUserID, usersById) {
+  const otherID = conversation.participants.find((id) => id !== currentUserID) ?? currentUserID;
+  return usersById.get(otherID);
+}
+
+function isTwoPersonConversation(conversation) {
+  return (conversation?.participants?.length ?? 0) === 2;
+}
+
+function getConversationSubtitle(conversation, currentUserID, usersById, locale, t) {
+  if (!isTwoPersonConversation(conversation)) {
+    return t("roomMembers", { count: conversation.participants.length });
+  }
+  const user = resolveConversationUser(conversation, currentUserID, usersById);
+  return formatPresence(user, locale, t);
+}
+
+function getConversationDescription(conversation, currentUserID, usersById, locale, t) {
+  if (!isTwoPersonConversation(conversation)) {
+    return conversation.description || t("roomMembers", { count: conversation.participants.length });
+  }
+  return "";
+}
+
+function formatPresence(user, locale, t) {
+  if (!user) return "";
+  if (user.is_online) {
+    return t("online");
+  }
+  const minutes = parseLastSeenMinutes(user.last_seen);
+  if (minutes === 0) {
+    return t("justNow");
+  }
+  if (typeof minutes === "number") {
+    return t("minutesAgo", { count: minutes });
+  }
+  return locale === "zh" ? user.last_seen : t("offline");
+}
+
+function parseLastSeenMinutes(lastSeen) {
+  if (!lastSeen) return null;
+  if (lastSeen.includes("刚")) return 0;
+  const match = lastSeen.match(/(\d+)/);
+  return match ? Number(match[1]) : null;
+}
+
+function formatTime(value, locale) {
+  if (!value) return "";
+  return new Date(value).toLocaleTimeString(locale === "zh" ? "zh-CN" : "en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: locale === "zh" ? "Asia/Shanghai" : "UTC",
+  });
+}
+
+function latestAt(conversation) {
+  if (!conversation.messages.length) return 0;
+  return new Date(conversation.messages[conversation.messages.length - 1].created_at).getTime();
+}
+
+function applyIMEvent(current, event) {
+  if (!current || !event?.type) {
+    return current;
+  }
+
+  if (event.type === "message.created" && event.message) {
+    return appendMessageToData(current, event.conversation_id, event.message);
+  }
+  if ((event.type === "conversation.created" || event.type === "conversation.members_added") && event.conversation) {
+    return upsertConversationInData(current, event.conversation);
+  }
+  return current;
+}
+
+function appendMessageToData(current, conversationID, message) {
+  if (!current || !conversationID || !message) {
+    return current;
+  }
+
+  const conversations = current.conversations.map((conversation) => {
+    if (conversation.id !== conversationID) {
+      return conversation;
+    }
+    if (conversation.messages.some((item) => item.id === message.id)) {
+      return conversation;
+    }
+    return { ...conversation, messages: [...conversation.messages, message] };
+  });
+  return { ...current, conversations: sortConversations(conversations) };
+}
+
+function upsertConversationInData(current, conversation) {
+  if (!current || !conversation) {
+    return current;
+  }
+
+  const existing = current.conversations.some((item) => item.id === conversation.id);
+  const conversations = existing
+    ? current.conversations.map((item) => (item.id === conversation.id ? conversation : item))
+    : [conversation, ...current.conversations];
+  return { ...current, conversations: sortConversations(conversations) };
+}
+
+function sortConversations(conversations) {
+  return [...conversations].sort((a, b) => latestAt(b) - latestAt(a));
+}
+
+function toggleSelection(current, id) {
+  return current.includes(id) ? current.filter((item) => item !== id) : [...current, id];
+}
+
+function renderMarkdown(content) {
+  const raw = marked.parse(content ?? "");
+  return DOMPurify.sanitize(raw, {
+    USE_PROFILES: { html: true },
+    ADD_ATTR: ["target", "rel", "class"],
+  });
+}
+
+createRoot(document.getElementById("root")).render(html`<${App} />`);
