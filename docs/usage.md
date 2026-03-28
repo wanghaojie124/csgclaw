@@ -41,7 +41,7 @@ csgclaw onboard \
 初始化完成后启动服务：
 
 ```bash
-csgclaw start --foreground
+csgclaw start
 ```
 
 默认地址：

@@ -39,7 +39,7 @@ func main() {
 		if err := runStart(); err != nil {
 			log.Fatal(err)
 		}
-	case "serve":
+	case "_serve":
 		if err := runServe(ctx); err != nil {
 			log.Fatal(err)
 		}
@@ -62,7 +62,7 @@ func usage() {
 
 Usage:
   csgclaw onboard [--force-recreate-manager]
-  csgclaw start [--foreground]
+  csgclaw start [-d|--daemon]
   csgclaw create --name NAME --image IMAGE
   csgclaw list
 `)
@@ -136,7 +136,8 @@ func runOnboard() error {
 
 func runStart() error {
 	fs := flag.NewFlagSet("start", flag.ContinueOnError)
-	foreground := fs.Bool("foreground", false, "run server in foreground")
+	daemon := fs.Bool("daemon", false, "run server in background")
+	fs.BoolVar(daemon, "d", false, "run server in background")
 	if err := fs.Parse(os.Args[2:]); err != nil {
 		return err
 	}
@@ -146,11 +147,11 @@ func runStart() error {
 		return err
 	}
 
-	if *foreground {
-		return serveForeground(cfg)
+	if *daemon {
+		return serveBackground(cfg)
 	}
 
-	return serveBackground(cfg)
+	return serveForeground(cfg)
 }
 
 func serveForeground(cfg config.Config) error {
@@ -194,7 +195,7 @@ func serveBackground(cfg config.Config) error {
 	}
 	defer logFile.Close()
 
-	cmd := exec.Command(exe, "serve")
+	cmd := exec.Command(exe, "_serve")
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}

@@ -51,7 +51,7 @@ build: boxlite-setup
 	env GOCACHE=$(GOCACHE) $(GO) build -o $(BIN) ./cmd/csgclaw
 
 run: boxlite-setup
-	env GOCACHE=$(GOCACHE) $(GO) run ./cmd/csgclaw serve
+	env GOCACHE=$(GOCACHE) $(GO) run ./cmd/csgclaw start
 
 onboard: boxlite-setup
 	env GOCACHE=$(GOCACHE) $(GO) run ./cmd/csgclaw onboard \
