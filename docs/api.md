@@ -1,0 +1,393 @@
+# CSGClaw API 简要文档
+
+本文基于当前代码中的实际 HTTP 路由整理，默认服务地址为 `http://127.0.0.1:18080`。
+
+## 约定
+
+- 内容类型：除 SSE 接口外，请求和响应均为 `application/json`
+- 时间格式：使用 RFC3339 / ISO8601，例如 `2026-03-28T12:00:00Z`
+- 认证：大部分接口当前不需要认证；仅 `/api/bots/*` 需要 `Authorization: Bearer <token>`
+- 错误返回：失败时通常返回纯文本错误信息，不是统一 JSON 结构
+
+## 1. 基础接口
+
+### `GET /healthz`
+
+健康检查。
+
+响应示例：
+
+```text
+ok
+```
+
+## 2. Agent 接口
+
+统一后的 `agent` 对象字段如下。除 PicoClaw Bot 兼容接口外，`bot / worker / agent` 在 API 和内部结构里都按这一套字段表达：
+
+```json
+{
+  "id": "u-alice",
+  "name": "alice",
+  "description": "frontend dev",
+  "role": "worker",
+  "status": "running",
+  "created_at": "2026-03-28T12:00:03Z",
+  "model_id": "gpt-4o-mini"
+}
+```
+
+补充说明：
+
+- `role` 当前常见值：`manager`、`worker`、`agent`
+- `image` 仍可能出现在响应中，用于表示容器镜像；它不是统一身份字段的一部分
+- `/api/v1/workers` 只是 `worker` 视角的路由别名，返回对象仍然是统一的 `agent`
+
+### `GET /api/v1/agents`
+
+获取全部 agent 列表。
+
+响应示例：
+
+```json
+[
+  {
+    "id": "u-manager",
+    "name": "manager",
+    "description": "",
+    "role": "manager",
+    "status": "running",
+    "created_at": "2026-03-28T12:00:00Z",
+    "model_id": "minimax-m2.7",
+    "image": "ghcr.io/russellluo/picoclaw:2026.3.27"
+  }
+]
+```
+
+### `POST /api/v1/agents`
+
+创建普通 agent。
+
+请求体：
+
+```json
+{
+  "id": "agent-alice",
+  "name": "alice",
+  "description": "general purpose agent",
+  "role": "agent",
+  "model_id": "minimax-m2.7",
+  "image": "ghcr.io/example/agent:latest"
+}
+```
+
+响应：`201 Created`
+
+```json
+{
+  "id": "agent-alice",
+  "name": "alice",
+  "description": "general purpose agent",
+  "role": "agent",
+  "image": "ghcr.io/example/agent:latest",
+  "status": "running",
+  "created_at": "2026-03-28T12:00:00Z",
+  "model_id": "minimax-m2.7"
+}
+```
+
+说明：
+
+- `name` 必填
+- `image` 对普通容器 agent 必填
+- `id`、`description`、`role`、`status`、`created_at`、`model_id` 可传；未传时由服务端补默认值或实际运行态填充
+- `role=manager` 不允许通过该接口创建
+- 失败时通常返回 `502 Bad Gateway`
+
+## 3. Worker 接口
+
+### `GET /api/v1/workers`
+
+获取全部 `role=worker` 的 agent 列表。
+
+### `POST /api/v1/workers`
+
+创建 `role=worker` 的 agent，并自动同步到 IM 用户体系。
+
+请求体与 `POST /api/v1/agents` 使用同一结构；服务端会强制把 `role` 视为 `worker`。
+
+请求体：
+
+```json
+{
+  "id": "u-alice",
+  "name": "alice",
+  "description": "frontend dev",
+  "model_id": "gpt-4o-mini",
+  "role": "worker"
+}
+```
+
+响应：`201 Created`
+
+```json
+{
+  "id": "u-alice",
+  "name": "alice",
+  "description": "frontend dev",
+  "role": "worker",
+  "status": "running",
+  "created_at": "2026-03-28T12:00:03Z",
+  "model_id": "gpt-4o-mini",
+  "image": "ghcr.io/russellluo/picoclaw:2026.3.27"
+}
+```
+
+说明：
+
+- `name` 必填
+- `name` 不能是 `manager`
+- `id` 可选；未传时服务端会自动生成
+- `status`、`created_at` 以实际 box 启动结果为准
+- `manager` 嵌套字段已不再支持
+- 若 IM 服务可用，会自动创建对应 IM 用户，并创建 `Admin & <Worker>` 私聊
+- 校验失败通常返回 `400 Bad Request`
+
+## 4. IM 接口
+
+### `GET /api/v1/im/bootstrap`
+
+获取 IM 初始化数据，供 WebUI 首次加载使用。
+
+响应示例：
+
+```json
+{
+  "current_user_id": "u-admin",
+  "users": [
+    {
+      "id": "u-admin",
+      "name": "Admin",
+      "handle": "admin",
+      "role": "Admin",
+      "avatar": "AD",
+      "is_online": true,
+      "accent_hex": "#dc2626"
+    }
+  ],
+  "conversations": []
+}
+```
+
+### `GET /api/v1/im/events`
+
+订阅 IM 事件流，返回 `text/event-stream`。
+
+事件格式：
+
+```text
+: connected
+
+data: {"type":"message.created","conversation_id":"room-1","message":{"id":"msg-1","sender_id":"u-admin","content":"hello","created_at":"2026-03-28T12:00:00Z","mentions":[]},"sender":{"id":"u-admin","name":"Admin","handle":"admin","role":"Admin","avatar":"AD","is_online":true,"accent_hex":"#dc2626"}}
+```
+
+当前事件类型：
+
+- `message.created`
+- `conversation.created`
+- `conversation.members_added`
+
+### `POST /api/v1/im/messages`
+
+在会话中发送消息。
+
+请求体：
+
+```json
+{
+  "conversation_id": "room-1",
+  "sender_id": "u-admin",
+  "content": "hello @alice"
+}
+```
+
+响应：`201 Created`
+
+```json
+{
+  "id": "msg-1743139200000000001",
+  "sender_id": "u-admin",
+  "content": "hello @alice",
+  "created_at": "2026-03-28T12:00:00Z",
+  "mentions": [
+    "u-alice"
+  ]
+}
+```
+
+说明：
+
+- `conversation_id`、`sender_id`、`content` 必填
+- `content` 中的 `@handle` 会解析为 `mentions`
+
+### `POST /api/v1/im/conversations`
+
+创建新会话。
+
+请求体：
+
+```json
+{
+  "title": "Frontend Sync",
+  "description": "Discuss frontend tasks",
+  "creator_id": "u-admin",
+  "participant_ids": ["u-manager", "u-alice"],
+  "locale": "zh-CN"
+}
+```
+
+响应：`201 Created`
+
+```json
+{
+  "id": "room-1743139200000000000",
+  "title": "Frontend Sync",
+  "subtitle": "3 members",
+  "description": "Discuss frontend tasks",
+  "participants": ["u-admin", "u-manager", "u-alice"],
+  "messages": [
+    {
+      "id": "msg-1743139200000000002",
+      "sender_id": "u-admin",
+      "content": "已创建会话 Frontend Sync",
+      "created_at": "2026-03-28T12:00:00Z"
+    }
+  ]
+}
+```
+
+说明：
+
+- `title`、`creator_id` 必填
+- `participant_ids` 会和 `creator_id` 合并去重
+- 返回里的 `subtitle` 会根据人数自动生成
+
+### `POST /api/v1/im/conversations/members`
+
+向会话中添加成员。
+
+请求体：
+
+```json
+{
+  "conversation_id": "room-1",
+  "inviter_id": "u-admin",
+  "user_ids": ["u-alice", "u-bob"],
+  "locale": "zh-CN"
+}
+```
+
+响应：`200 OK`，返回更新后的会话对象。
+
+说明：
+
+- `conversation_id`、`inviter_id`、`user_ids` 必填
+- `inviter_id` 必须已经在会话内
+- 若没有任何新成员被加入，会返回 `400 Bad Request`
+
+### `POST /api/v1/im/agents/join`
+
+把 agent 加入指定会话。该接口会先确保 agent 在 IM 中拥有对应用户身份。
+
+请求体：
+
+```json
+{
+  "agent_id": "u-alice",
+  "conversation_id": "room-1",
+  "inviter_id": "u-admin",
+  "locale": "zh-CN"
+}
+```
+
+也支持使用 `room_id`：
+
+```json
+{
+  "agent_id": "u-alice",
+  "room_id": "room-1",
+  "inviter_id": "u-admin"
+}
+```
+
+响应：`200 OK`，返回更新后的会话对象。
+
+说明：
+
+- `conversation_id` 和 `room_id` 二选一，不能同时传
+- `inviter_id` 为空时，服务端默认使用 `u-admin`
+- 若 `agent_id` 不存在，返回 `404 Not Found`
+
+## 5. 兼容别名接口
+
+当前以下接口是同义路由，行为与上文一致：
+
+- `POST /api/v1/im/rooms` 等价于 `POST /api/v1/im/conversations`
+- `POST /api/v1/im/rooms/invite` 等价于 `POST /api/v1/im/conversations/members`
+
+## 6. PicoClaw Bot 接口
+
+这组接口用于 PicoClaw 与 IM 的双向通信。
+
+认证要求：
+
+- 请求头必须带 `Authorization: Bearer <token>`
+- token 来自 `~/.csgclaw/config.toml` 中的 `[picoclaw].access_token`
+- 若服务端配置为空，则不校验；默认初始化值为 `your_access_token`
+
+### `GET /api/bots/{bot_id}/events`
+
+订阅 bot 事件流，返回 `text/event-stream`。
+
+响应示例：
+
+```text
+: connected
+
+event: message
+data: {"message_id":"msg-1","chat_id":"room-1","chat_type":"direct","sender":{"id":"u-admin","username":"admin","display_name":"Admin"},"text":"hello","timestamp":"1743139200000"}
+```
+
+说明：
+
+- 支持的 `chat_type` 为 `direct` 或 `group`
+- 私聊中，bot 只要在会话里就会收到消息
+- 群聊中，只有被 `@bot` 时才会收到消息
+- bot 自己发出的消息不会被回推
+
+### `POST /api/bots/{bot_id}/messages/send`
+
+bot 向指定会话发送消息。
+
+请求体：
+
+```json
+{
+  "chat_id": "room-1",
+  "text": "hello from bot"
+}
+```
+
+响应：`200 OK`
+
+```json
+{
+  "message_id": "msg-1743139200000000003"
+}
+```
+
+说明：
+
+- 消息发送者固定为路径中的 `bot_id`
+- `chat_id` 必须是已存在会话
+- `text` 不能为空

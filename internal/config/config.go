@@ -42,10 +42,9 @@ const (
 	AgentsFileName     = "agents.json"
 	IMStateFileName    = "im.json"
 
-	DefaultListenAddr = "0.0.0.0:18080"
-	DefaultAPIBaseURL = "http://127.0.0.1:18080"
-	//DefaultLLMBaseURL   = "http://127.0.0.1:4000"
-	DefaultLLMBaseURL          = "http://192.168.2.10:4000"
+	DefaultListenAddr          = "0.0.0.0:18080"
+	DefaultAPIBaseURL          = "http://127.0.0.1:18080"
+	DefaultLLMBaseURL          = "http://127.0.0.1:4000"
 	DefaultLLMAPIKey           = "sk-1234567890"
 	DefaultLLMModelID          = "minimax-m2.7"
 	DefaultPicoClawAccessToken = "your_access_token"

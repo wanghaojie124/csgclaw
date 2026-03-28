@@ -354,7 +354,7 @@ func newAgentService(cfg config.Config) (*agent.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	return agent.NewService(cfg.LLM, cfg.Bootstrap.ManagerImage, agentsPath, runtimeHome)
+	return agent.NewService(cfg.LLM, cfg.Server, cfg.PicoClaw, cfg.Bootstrap.ManagerImage, agentsPath, runtimeHome)
 }
 
 func newIMService() (*im.Service, error) {

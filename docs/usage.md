@@ -51,7 +51,63 @@ csgclaw start
 
 ## 2. 关键接口
 
-### 2.1 PicoClaw 订阅事件流
+### 2.1 创建 Worker
+
+```http
+POST /api/v1/workers
+Content-Type: application/json
+
+{
+  "id": "u-alice",
+  "name": "alice",
+  "description": "frontend dev",
+  "status": "requested",
+  "created_at": "2026-03-28T12:00:00Z",
+  "model_id": "gpt-4o-mini",
+  "manager": {
+    "id": "u-manager",
+    "name": "manager",
+    "description": "bootstrap manager",
+    "status": "running",
+    "created_at": "2026-03-28T11:59:00Z",
+    "model_id": "gpt-4o-mini"
+  }
+}
+```
+
+示例：
+
+```bash
+curl -X POST \
+  -H 'Content-Type: application/json' \
+  http://127.0.0.1:18080/api/v1/workers \
+  -d '{
+    "id": "u-alice",
+    "name": "alice",
+    "description": "frontend dev",
+    "status": "requested",
+    "created_at": "2026-03-28T12:00:00Z",
+    "model_id": "gpt-4o-mini",
+    "manager": {
+      "id": "u-manager",
+      "name": "manager",
+      "description": "bootstrap manager",
+      "status": "running",
+      "created_at": "2026-03-28T11:59:00Z",
+      "model_id": "gpt-4o-mini"
+    }
+  }'
+```
+
+说明：
+
+- 创建时会真正拉起一个 box，镜像和启动方式与 manager 相同，都会运行 `picoclaw gateway`
+- 会为 worker 自动生成独立的 PicoClaw 配置目录，`bot_id` 使用请求里的 `id`
+- 会自动在 IM 中创建对应 user / bot 身份，并创建一个 `Admin & <Worker>` bootstrap 私聊
+- `name` 必须唯一，大小写不敏感；且不能为 `manager`
+- 返回体里的 `status` 和 `created_at` 以实际 box 启动结果为准，不使用请求体里的占位值
+
+### 2.2 PicoClaw 订阅事件流
 
 ```http
 GET /api/bots/{bot_id}/events
@@ -82,7 +138,7 @@ data: {"message_id":"msg-1","chat_id":"room-1","chat_type":"direct","sender":{"i
 - 群聊中，只有消息里 `@bot` 时才会收到消息事件
 - bot 自己发出的消息不会再次推回给 bot
 
-### 2.2 PicoClaw 发送回复消息
+### 2.3 PicoClaw 发送回复消息
 
 ```http
 POST /api/bots/{bot_id}/messages/send
@@ -176,10 +232,11 @@ access_token = "your-shared-token"
 最简单的联调顺序：
 
 1. 启动 CSGClaw IM
-2. 先用 `curl -N` 连上 `/api/bots/{bot_id}/events`
-3. 在 WebUI 中给 bot 所在私聊发消息，或在群聊里 `@bot`
-4. 确认 SSE 能收到 `event: message`
-5. 再用 `POST /api/bots/{bot_id}/messages/send` 验证 PicoClaw 回消息链路
+2. 调用 `POST /api/v1/workers` 创建一个 worker
+3. 先用 `curl -N` 连上 `/api/bots/{bot_id}/events`
+4. 在 WebUI 中给 bot 所在私聊发消息，或在群聊里 `@bot`
+5. 确认 SSE 能收到 `event: message`
+6. 再用 `POST /api/bots/{bot_id}/messages/send` 验证 PicoClaw 回消息链路
 
 如果 SSE 收不到消息，优先检查：
 

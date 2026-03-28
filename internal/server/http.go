@@ -87,6 +87,8 @@ func (s *HTTPServer) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealthz)
 	mux.HandleFunc("/api/v1/agents", s.handleAgents)
+	mux.HandleFunc("/api/v1/workers", s.handleWorkers)
+	mux.HandleFunc("/api/v1/im/agents/join", s.handleIMAgentJoin)
 	mux.HandleFunc("/api/v1/im/bootstrap", s.handleIMBootstrap)
 	mux.HandleFunc("/api/v1/im/events", s.handleIMEvents)
 	mux.HandleFunc("/api/v1/im/messages", s.handleIMMessages)
@@ -130,6 +132,95 @@ func (s *HTTPServer) handleAgents(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (s *HTTPServer) handleWorkers(w http.ResponseWriter, r *http.Request) {
+	if s.svc == nil {
+		http.Error(w, "agent service is not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, s.svc.ListWorkers())
+	case http.MethodPost:
+		var req agent.CreateRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, fmt.Sprintf("decode request: %v", err), http.StatusBadRequest)
+			return
+		}
+		req.Role = agent.RoleWorker
+
+		created, err := s.svc.CreateWorker(r.Context(), req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if s.im != nil {
+			_, _, err := s.im.EnsureAgentUser(im.EnsureAgentUserRequest{
+				ID:     created.ID,
+				Name:   created.Name,
+				Handle: deriveAgentHandle(created),
+				Role:   displayRole(created.Role),
+			})
+			if err != nil {
+				http.Error(w, fmt.Sprintf("agent created but failed to ensure im user: %v", err), http.StatusBadGateway)
+				return
+			}
+		}
+
+		writeJSON(w, http.StatusCreated, created)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *HTTPServer) handleIMAgentJoin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.svc == nil {
+		http.Error(w, "agent service is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if s.im == nil {
+		http.Error(w, "im service is not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req im.AddAgentToConversationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf("decode request: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	joinedAgent, ok := s.svc.Agent(req.AgentID)
+	if !ok {
+		http.Error(w, "agent not found", http.StatusNotFound)
+		return
+	}
+
+	if _, _, err := s.im.EnsureAgentUser(im.EnsureAgentUserRequest{
+		ID:     joinedAgent.ID,
+		Name:   joinedAgent.Name,
+		Handle: deriveAgentHandle(joinedAgent),
+		Role:   displayRole(joinedAgent.Role),
+	}); err != nil {
+		http.Error(w, fmt.Sprintf("ensure agent im user: %v", err), http.StatusBadGateway)
+		return
+	}
+
+	if strings.TrimSpace(req.InviterID) == "" {
+		req.InviterID = "u-admin"
+	}
+	conversation, err := s.im.AddAgentToConversation(req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.publishConversationEvent(im.EventTypeConversationMembersAdded, conversation)
+	writeJSON(w, http.StatusOK, conversation)
 }
 
 func (s *HTTPServer) handleIMBootstrap(w http.ResponseWriter, r *http.Request) {
@@ -338,6 +429,53 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 	_ = json.NewEncoder(w).Encode(data)
 }
 
+func deriveAgentHandle(a agent.Agent) string {
+	if handle, ok := sanitizeHandle(strings.ToLower(strings.ReplaceAll(strings.TrimSpace(a.Name), " ", "-"))); ok {
+		return handle
+	}
+	if handle, ok := sanitizeHandle(strings.ToLower(strings.TrimPrefix(strings.TrimSpace(a.ID), "u-"))); ok {
+		return handle
+	}
+	switch strings.ToLower(strings.TrimSpace(a.Role)) {
+	case agent.RoleManager:
+		return "manager"
+	case agent.RoleWorker:
+		return "worker"
+	default:
+		return "agent"
+	}
+}
+
+func displayRole(role string) string {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case agent.RoleManager:
+		return "Manager"
+	case agent.RoleWorker:
+		return "Worker"
+	default:
+		return "Agent"
+	}
+}
+
+func sanitizeHandle(input string) (string, bool) {
+	var b strings.Builder
+	hasAlphaNum := false
+	for _, r := range input {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			hasAlphaNum = true
+			b.WriteRune(r)
+			continue
+		}
+		if r == '.' || r == '_' || r == '-' {
+			b.WriteRune(r)
+		}
+	}
+	if b.Len() == 0 || !hasAlphaNum {
+		return "", false
+	}
+	return b.String(), true
+}
+
 func (s *HTTPServer) publishMessageCreated(conversationID, senderID string, message im.Message) {
 	if s.imBus == nil {
 		return
@@ -406,9 +544,17 @@ type Client struct {
 }
 
 type CreateAgentRequest struct {
-	Name  string `json:"name"`
-	Image string `json:"image"`
+	ID          string    `json:"id,omitempty"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
+	Image       string    `json:"image,omitempty"`
+	Role        string    `json:"role,omitempty"`
+	Status      string    `json:"status,omitempty"`
+	CreatedAt   time.Time `json:"created_at,omitempty"`
+	ModelID     string    `json:"model_id,omitempty"`
 }
+
+type CreateWorkerRequest = CreateAgentRequest
 
 func NewClient(baseURL string, httpClient *http.Client) *Client {
 	if httpClient == nil {
@@ -469,4 +615,88 @@ func (c *Client) ListAgents(ctx context.Context) ([]agent.Agent, error) {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 	return agents, nil
+}
+
+func (c *Client) CreateWorker(ctx context.Context, req CreateWorkerRequest) (agent.Agent, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return agent.Agent{}, fmt.Errorf("encode request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v1/workers", bytes.NewReader(body))
+	if err != nil {
+		return agent.Agent{}, fmt.Errorf("build request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return agent.Agent{}, fmt.Errorf("call api: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		data, _ := io.ReadAll(resp.Body)
+		return agent.Agent{}, fmt.Errorf("api returned %s: %s", resp.Status, bytes.TrimSpace(data))
+	}
+
+	var created agent.Agent
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		return agent.Agent{}, fmt.Errorf("decode response: %w", err)
+	}
+	return created, nil
+}
+
+func (c *Client) ListWorkers(ctx context.Context) ([]agent.Agent, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/api/v1/workers", nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("call api: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		data, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("api returned %s: %s", resp.Status, bytes.TrimSpace(data))
+	}
+
+	var workers []agent.Agent
+	if err := json.NewDecoder(resp.Body).Decode(&workers); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	return workers, nil
+}
+
+func (c *Client) AddAgentToConversation(ctx context.Context, req im.AddAgentToConversationRequest) (im.Conversation, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return im.Conversation{}, fmt.Errorf("encode request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v1/im/agents/join", bytes.NewReader(body))
+	if err != nil {
+		return im.Conversation{}, fmt.Errorf("build request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return im.Conversation{}, fmt.Errorf("call api: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		data, _ := io.ReadAll(resp.Body)
+		return im.Conversation{}, fmt.Errorf("api returned %s: %s", resp.Status, bytes.TrimSpace(data))
+	}
+
+	var conversation im.Conversation
+	if err := json.NewDecoder(resp.Body).Decode(&conversation); err != nil {
+		return im.Conversation{}, fmt.Errorf("decode response: %w", err)
+	}
+	return conversation, nil
 }

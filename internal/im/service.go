@@ -76,6 +76,23 @@ type AddConversationMembersRequest struct {
 	Locale         string   `json:"locale"`
 }
 
+type EnsureAgentUserRequest struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Handle string `json:"handle"`
+	Role   string `json:"role"`
+}
+
+type EnsureWorkerUserRequest = EnsureAgentUserRequest
+
+type AddAgentToConversationRequest struct {
+	AgentID        string `json:"agent_id"`
+	ConversationID string `json:"conversation_id,omitempty"`
+	RoomID         string `json:"room_id,omitempty"`
+	InviterID      string `json:"inviter_id"`
+	Locale         string `json:"locale"`
+}
+
 type Service struct {
 	mu            sync.RWMutex
 	statePath     string
@@ -314,6 +331,64 @@ func (s *Service) Bootstrap() Bootstrap {
 	}
 }
 
+func (s *Service) EnsureAgentUser(req EnsureAgentUserRequest) (User, *Conversation, error) {
+	id := strings.TrimSpace(req.ID)
+	name := strings.TrimSpace(req.Name)
+	handle := strings.TrimSpace(req.Handle)
+	role := strings.TrimSpace(req.Role)
+	switch {
+	case id == "":
+		return User{}, nil, fmt.Errorf("id is required")
+	case name == "":
+		return User{}, nil, fmt.Errorf("name is required")
+	case handle == "":
+		return User{}, nil, fmt.Errorf("handle is required")
+	}
+	if role == "" {
+		role = "Worker"
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if existing, ok := s.users[id]; ok {
+		room, _ := s.ensureAdminAgentRoomLocked(id, existing.Name)
+		if err := s.saveLocked(); err != nil {
+			return User{}, nil, err
+		}
+		return existing, room, nil
+	}
+	if existingID, ok := s.byHandle[strings.ToLower(handle)]; ok && existingID != id {
+		return User{}, nil, fmt.Errorf("handle %q already exists", handle)
+	}
+
+	user := User{
+		ID:        id,
+		Name:      name,
+		Handle:    handle,
+		Role:      role,
+		Avatar:    initials(name),
+		IsOnline:  true,
+		AccentHex: accentHexForID(id),
+	}
+	s.users[id] = user
+	s.byHandle[strings.ToLower(handle)] = id
+	room, roomCreated := s.ensureAdminAgentRoomLocked(id, name)
+	if err := s.saveLocked(); err != nil {
+		delete(s.users, id)
+		delete(s.byHandle, strings.ToLower(handle))
+		if roomCreated && room != nil {
+			delete(s.conversations, room.ID)
+		}
+		return User{}, nil, err
+	}
+	return user, room, nil
+}
+
+func (s *Service) EnsureWorkerUser(req EnsureWorkerUserRequest) (User, *Conversation, error) {
+	return s.EnsureAgentUser(req)
+}
+
 func (s *Service) CreateMessage(req CreateMessageRequest) (Message, error) {
 	content := strings.TrimSpace(req.Content)
 	if req.ConversationID == "" {
@@ -487,6 +562,27 @@ func (s *Service) AddConversationMembers(req AddConversationMembersRequest) (Con
 	}
 
 	return s.presentConversationLocked(*conv), nil
+}
+
+func (s *Service) AddAgentToConversation(req AddAgentToConversationRequest) (Conversation, error) {
+	conversationID := strings.TrimSpace(req.ConversationID)
+	roomID := strings.TrimSpace(req.RoomID)
+	switch {
+	case conversationID == "" && roomID == "":
+		return Conversation{}, fmt.Errorf("conversation_id or room_id is required")
+	case conversationID != "" && roomID != "":
+		return Conversation{}, fmt.Errorf("conversation_id and room_id cannot both be set")
+	}
+	if conversationID == "" {
+		conversationID = roomID
+	}
+
+	return s.AddConversationMembers(AddConversationMembersRequest{
+		ConversationID: conversationID,
+		InviterID:      strings.TrimSpace(req.InviterID),
+		UserIDs:        []string{strings.TrimSpace(req.AgentID)},
+		Locale:         req.Locale,
+	})
 }
 
 func (s *Service) Conversation(conversationID string) (Conversation, bool) {
@@ -664,6 +760,78 @@ func (s *Service) bootstrapLocked() Bootstrap {
 		Users:         users,
 		Conversations: conversations,
 	}
+}
+
+func (s *Service) ensureAdminAgentRoomLocked(agentID, agentName string) (*Conversation, bool) {
+	for _, conv := range s.conversations {
+		if len(conv.Participants) != 2 {
+			continue
+		}
+		if containsUserIDInConversation(*conv, "u-admin") && containsUserIDInConversation(*conv, agentID) {
+			presented := s.presentConversationLocked(*conv)
+			return &presented, false
+		}
+	}
+
+	now := time.Now().UTC()
+	room := Conversation{
+		ID:           fmt.Sprintf("room-%d", now.UnixNano()),
+		Title:        agentName,
+		Subtitle:     formatConversationSubtitle(2),
+		Description:  fmt.Sprintf("Bootstrap room for Admin and %s.", agentName),
+		Participants: []string{"u-admin", agentID},
+		Messages: []Message{
+			{
+				ID:        fmt.Sprintf("msg-%d", now.UnixNano()+1),
+				SenderID:  agentID,
+				Content:   fmt.Sprintf("Bootstrap room created for Admin and %s.", agentName),
+				CreatedAt: now,
+			},
+		},
+	}
+	s.conversations[room.ID] = &room
+	presented := s.presentConversationLocked(room)
+	return &presented, true
+}
+
+func initials(name string) string {
+	fields := strings.Fields(strings.TrimSpace(name))
+	if len(fields) == 0 {
+		return "WK"
+	}
+	var b strings.Builder
+	for _, field := range fields {
+		for _, r := range field {
+			if r == '-' || r == '_' {
+				continue
+			}
+			b.WriteRune(r)
+			if b.Len() >= 2 {
+				return strings.ToUpper(b.String())
+			}
+			break
+		}
+	}
+	if b.Len() == 0 {
+		return "WK"
+	}
+	return strings.ToUpper(b.String())
+}
+
+func accentHexForID(id string) string {
+	palette := []string{
+		"#2563eb",
+		"#7c3aed",
+		"#0891b2",
+		"#059669",
+		"#ea580c",
+		"#db2777",
+	}
+	sum := 0
+	for _, r := range id {
+		sum += int(r)
+	}
+	return palette[sum%len(palette)]
 }
 
 func latestMessageAt(conv Conversation) time.Time {

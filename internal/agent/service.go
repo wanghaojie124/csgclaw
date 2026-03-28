@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,22 +17,37 @@ import (
 	"csgclaw/internal/config"
 )
 
+const (
+	RoleAgent   = "agent"
+	RoleWorker  = "worker"
+	RoleManager = "manager"
+)
+
 type Agent struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Image     string    `json:"image"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	ModelID   string    `json:"model_id,omitempty"`
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
+	Image       string    `json:"image,omitempty"`
+	Role        string    `json:"role"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"created_at"`
+	ModelID     string    `json:"model_id,omitempty"`
 }
 
 type CreateRequest struct {
-	Name  string `json:"name"`
-	Image string `json:"image"`
+	ID          string    `json:"id,omitempty"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
+	Image       string    `json:"image,omitempty"`
+	Role        string    `json:"role,omitempty"`
+	Status      string    `json:"status,omitempty"`
+	CreatedAt   time.Time `json:"created_at,omitempty"`
+	ModelID     string    `json:"model_id,omitempty"`
 }
 
 const (
 	ManagerName        = "manager"
+	ManagerUserID      = "u-manager"
 	managerHostPort    = 18790
 	managerGuestPort   = 18790
 	managerDebugMode   = false
@@ -43,11 +59,12 @@ const (
 
 type Service struct {
 	llm          config.LLMConfig
+	server       config.ServerConfig
+	pico         config.PicoClawConfig
 	managerImage string
 	state        string
-	homeDir      string
 	mu           sync.RWMutex
-	runtime      *boxlite.Runtime
+	runtimes     map[string]*boxlite.Runtime
 	boxes        map[string]closer
 	agents       map[string]Agent
 }
@@ -56,15 +73,17 @@ type closer interface {
 	Close() error
 }
 
-func NewService(llm config.LLMConfig, managerImage, statePath, runtimeHome string) (*Service, error) {
+func NewService(llm config.LLMConfig, server config.ServerConfig, pico config.PicoClawConfig, managerImage, statePath, runtimeHome string) (*Service, error) {
 	if managerImage == "" {
 		managerImage = config.DefaultManagerImage
 	}
 	svc := &Service{
 		llm:          llm,
+		server:       server,
+		pico:         pico,
 		managerImage: managerImage,
 		state:        statePath,
-		homeDir:      runtimeHome,
+		runtimes:     make(map[string]*boxlite.Runtime),
 		boxes:        make(map[string]closer),
 		agents:       make(map[string]Agent),
 	}
@@ -75,7 +94,7 @@ func NewService(llm config.LLMConfig, managerImage, statePath, runtimeHome strin
 }
 
 func EnsureBootstrapState(ctx context.Context, statePath, runtimeHome string, server config.ServerConfig, llm config.LLMConfig, pico config.PicoClawConfig, managerImage string, forceRecreate bool) error {
-	svc, err := NewService(llm, managerImage, statePath, runtimeHome)
+	svc, err := NewService(llm, server, pico, managerImage, statePath, runtimeHome)
 	if err != nil {
 		return err
 	}
@@ -83,7 +102,7 @@ func EnsureBootstrapState(ctx context.Context, statePath, runtimeHome string, se
 		_ = svc.Close()
 	}()
 
-	rt, err := svc.ensureRuntime()
+	rt, err := svc.ensureRuntime(ManagerName)
 	if err != nil {
 		return err
 	}
@@ -104,7 +123,7 @@ func EnsureBootstrapState(ctx context.Context, statePath, runtimeHome string, se
 		box, err = rt.Get(ctx, ManagerName)
 	}
 	if box == nil {
-		boxOpts, err := managerBoxOptions(server, llm, pico)
+		boxOpts, err := svc.gatewayBoxOptions(ManagerName, ManagerUserID, llm.ModelID)
 		if err != nil {
 			return err
 		}
@@ -144,15 +163,16 @@ func EnsureBootstrapState(ctx context.Context, statePath, runtimeHome string, se
 	}
 
 	manager := Agent{
-		ID:        info.ID,
+		ID:        ManagerUserID,
 		Name:      ManagerName,
 		Image:     svc.managerImage,
 		Status:    string(info.State),
 		CreatedAt: info.CreatedAt.UTC(),
 		ModelID:   llm.ModelID,
+		Role:      RoleManager,
 	}
 	for id, a := range svc.agents {
-		if a.Name == ManagerName && id != manager.ID {
+		if isManagerAgent(a) && id != manager.ID {
 			delete(svc.agents, id)
 		}
 	}
@@ -162,40 +182,79 @@ func EnsureBootstrapState(ctx context.Context, statePath, runtimeHome string, se
 }
 
 func (s *Service) Create(ctx context.Context, req CreateRequest) (Agent, error) {
-	if req.Name == "" {
+	id := strings.TrimSpace(req.ID)
+	name := strings.TrimSpace(req.Name)
+	description := strings.TrimSpace(req.Description)
+	image := strings.TrimSpace(req.Image)
+	role := normalizeRole(req.Role)
+	modelID := strings.TrimSpace(req.ModelID)
+	if name == "" {
 		return Agent{}, fmt.Errorf("name is required")
 	}
-	if req.Image == "" {
+	if image == "" {
 		return Agent{}, fmt.Errorf("image is required")
 	}
+	if role == RoleManager {
+		return Agent{}, fmt.Errorf("role %q is reserved", role)
+	}
+	if id == "" {
+		id = fmt.Sprintf("%s-%d", role, time.Now().UnixNano())
+	}
 
-	rt, err := s.ensureRuntime()
+	s.mu.RLock()
+	idExists := false
+	if _, ok := s.agents[id]; ok {
+		idExists = true
+	}
+	nameExists := s.hasNameLocked(name)
+	s.mu.RUnlock()
+	if idExists {
+		return Agent{}, fmt.Errorf("agent id %q already exists", id)
+	}
+	if nameExists {
+		return Agent{}, fmt.Errorf("agent name %q already exists", name)
+	}
+
+	rt, err := s.ensureRuntime(name)
 	if err != nil {
 		return Agent{}, err
 	}
 
-	id := fmt.Sprintf("agent-%d", time.Now().UnixNano())
-	box, err := rt.Create(ctx, req.Image,
-		boxlite.WithName(req.Name),
+	if modelID == "" {
+		modelID = s.llm.ModelID
+	}
+
+	box, err := rt.Create(ctx, image,
+		boxlite.WithName(name),
 		boxlite.WithAutoRemove(false),
 		boxlite.WithEnv("CSGCLAW_LLM_BASE_URL", s.llm.BaseURL),
 		boxlite.WithEnv("CSGCLAW_LLM_API_KEY", s.llm.APIKey),
-		boxlite.WithEnv("CSGCLAW_LLM_MODEL_ID", s.llm.ModelID),
+		boxlite.WithEnv("CSGCLAW_LLM_MODEL_ID", modelID),
 		boxlite.WithEnv("OPENAI_BASE_URL", s.llm.BaseURL),
 		boxlite.WithEnv("OPENAI_API_KEY", s.llm.APIKey),
-		boxlite.WithEnv("OPENAI_MODEL", s.llm.ModelID),
+		boxlite.WithEnv("OPENAI_MODEL", modelID),
 	)
 	if err != nil {
 		return Agent{}, fmt.Errorf("create boxlite agent: %w", err)
 	}
 
+	createdAt := req.CreatedAt.UTC()
+	if req.CreatedAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
+	status := strings.TrimSpace(req.Status)
+	if status == "" {
+		status = "running"
+	}
 	agent := Agent{
-		ID:        id,
-		Name:      req.Name,
-		Image:     req.Image,
-		Status:    "running",
-		CreatedAt: time.Now().UTC(),
-		ModelID:   s.llm.ModelID,
+		ID:          id,
+		Name:        name,
+		Description: description,
+		Image:       image,
+		Role:        role,
+		Status:      status,
+		CreatedAt:   createdAt,
+		ModelID:     modelID,
 	}
 
 	s.mu.Lock()
@@ -209,31 +268,121 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (Agent, error) 
 	return agent, nil
 }
 
-func (s *Service) List() []Agent {
+func (s *Service) Agent(id string) (Agent, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	agents := make([]Agent, 0, len(s.agents))
-	for _, a := range s.agents {
-		agents = append(agents, a)
+	a, ok := s.agents[strings.TrimSpace(id)]
+	if !ok {
+		return Agent{}, false
 	}
-	slices.SortFunc(agents, func(a, b Agent) int {
-		if a.CreatedAt.Equal(b.CreatedAt) {
-			switch {
-			case a.ID < b.ID:
-				return -1
-			case a.ID > b.ID:
-				return 1
-			default:
-				return 0
-			}
+	return *cloneAgent(&a), true
+}
+
+func (s *Service) List() []Agent {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return sortedAgentsFromMap(s.agents)
+}
+
+func (s *Service) CreateWorker(ctx context.Context, req CreateRequest) (Agent, error) {
+	id := strings.TrimSpace(req.ID)
+	name := strings.TrimSpace(req.Name)
+	description := strings.TrimSpace(req.Description)
+	modelID := strings.TrimSpace(req.ModelID)
+
+	switch {
+	case name == "":
+		return Agent{}, fmt.Errorf("name is required")
+	case strings.EqualFold(name, ManagerName):
+		return Agent{}, fmt.Errorf("name %q is reserved", name)
+	}
+	if id == "" {
+		id = fmt.Sprintf("%s-%d", RoleWorker, time.Now().UnixNano())
+	}
+
+	s.mu.RLock()
+	idExists := false
+	if _, ok := s.agents[id]; ok {
+		idExists = true
+	}
+	nameExists := s.hasNameLocked(name)
+	s.mu.RUnlock()
+	if idExists {
+		return Agent{}, fmt.Errorf("agent id %q already exists", id)
+	}
+	if nameExists {
+		return Agent{}, fmt.Errorf("agent name %q already exists", name)
+	}
+
+	rt, err := s.ensureRuntime(name)
+	if err != nil {
+		return Agent{}, err
+	}
+	if modelID == "" {
+		modelID = s.llm.ModelID
+	}
+
+	boxOpts, err := s.gatewayBoxOptions(name, id, modelID)
+	if err != nil {
+		return Agent{}, err
+	}
+	box, err := rt.Create(ctx, s.managerImage, boxOpts...)
+	if err != nil {
+		return Agent{}, fmt.Errorf("create worker box: %w", err)
+	}
+	if err := box.Start(ctx); err != nil {
+		return Agent{}, fmt.Errorf("start worker box: %w", err)
+	}
+	info, err := box.Info(ctx)
+	if err != nil {
+		return Agent{}, fmt.Errorf("read worker box info: %w", err)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.agents[id]; ok {
+		_ = box.Close()
+		return Agent{}, fmt.Errorf("agent id %q already exists", id)
+	}
+	if s.hasNameLocked(name) {
+		_ = box.Close()
+		return Agent{}, fmt.Errorf("agent name %q already exists", name)
+	}
+
+	worker := Agent{
+		ID:          id,
+		Name:        name,
+		Image:       s.managerImage,
+		Description: description,
+		Status:      string(info.State),
+		CreatedAt:   info.CreatedAt.UTC(),
+		ModelID:     modelID,
+		Role:        RoleWorker,
+	}
+	s.boxes[worker.ID] = box
+	s.agents[worker.ID] = worker
+	if err := s.saveLocked(); err != nil {
+		delete(s.boxes, worker.ID)
+		delete(s.agents, worker.ID)
+		_ = box.Close()
+		return Agent{}, err
+	}
+	return *cloneAgent(&worker), nil
+}
+
+func (s *Service) ListWorkers() []Agent {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	workers := make(map[string]Agent)
+	for id, a := range s.agents {
+		if a.Role == RoleWorker {
+			workers[id] = a
 		}
-		if a.CreatedAt.Before(b.CreatedAt) {
-			return -1
-		}
-		return 1
-	})
-	return agents
+	}
+	return sortedAgentsFromMap(workers)
 }
 
 func (s *Service) Close() error {
@@ -244,27 +393,32 @@ func (s *Service) Close() error {
 		_ = box.Close()
 		delete(s.boxes, id)
 	}
-	if s.runtime != nil {
-		err := s.runtime.Close()
-		s.runtime = nil
-		return err
+	var closeErr error
+	for name, rt := range s.runtimes {
+		if err := rt.Close(); err != nil && closeErr == nil {
+			closeErr = err
+		}
+		delete(s.runtimes, name)
 	}
-	return nil
+	return closeErr
 }
 
-func managerBoxOptions(server config.ServerConfig, llm config.LLMConfig, pico config.PicoClawConfig) ([]boxlite.BoxOption, error) {
+func (s *Service) gatewayBoxOptions(name, botID, modelID string) ([]boxlite.BoxOption, error) {
+	if strings.TrimSpace(modelID) == "" {
+		modelID = s.llm.ModelID
+	}
 	opts := []boxlite.BoxOption{
-		boxlite.WithName(ManagerName),
+		boxlite.WithName(name),
 		boxlite.WithDetach(true),
 		boxlite.WithAutoRemove(false),
 		//boxlite.WithPort(managerHostPort, managerGuestPort),
 		boxlite.WithEnv("HOME", "/home/picoclaw"),
-		boxlite.WithEnv("CSGCLAW_LLM_BASE_URL", llm.BaseURL),
-		boxlite.WithEnv("CSGCLAW_LLM_API_KEY", llm.APIKey),
-		boxlite.WithEnv("CSGCLAW_LLM_MODEL_ID", llm.ModelID),
-		boxlite.WithEnv("OPENAI_BASE_URL", llm.BaseURL),
-		boxlite.WithEnv("OPENAI_API_KEY", llm.APIKey),
-		boxlite.WithEnv("OPENAI_MODEL", llm.ModelID),
+		boxlite.WithEnv("CSGCLAW_LLM_BASE_URL", s.llm.BaseURL),
+		boxlite.WithEnv("CSGCLAW_LLM_API_KEY", s.llm.APIKey),
+		boxlite.WithEnv("CSGCLAW_LLM_MODEL_ID", modelID),
+		boxlite.WithEnv("OPENAI_BASE_URL", s.llm.BaseURL),
+		boxlite.WithEnv("OPENAI_API_KEY", s.llm.APIKey),
+		boxlite.WithEnv("OPENAI_MODEL", modelID),
 	}
 	if managerDebugMode {
 		opts = append(opts,
@@ -278,7 +432,7 @@ func managerBoxOptions(server config.ServerConfig, llm config.LLMConfig, pico co
 		)
 	}
 
-	hostPicoClawRoot, err := ensureManagerPicoClawConfig(server, llm, pico)
+	hostPicoClawRoot, err := ensureAgentPicoClawConfig(name, botID, s.server, s.llm, s.pico)
 	if err != nil {
 		return nil, err
 	}
@@ -300,12 +454,26 @@ func (s *Service) load() error {
 		return fmt.Errorf("read agent state: %w", err)
 	}
 
+	var state persistedState
+	if err := json.Unmarshal(data, &state); err == nil && state.isObject() {
+		for _, a := range state.Agents {
+			normalized := s.normalizeLoadedAgent(a)
+			s.agents[normalized.ID] = normalized
+		}
+		for _, w := range state.Workers {
+			normalized := s.normalizeLoadedAgent(w.toAgent())
+			s.agents[normalized.ID] = normalized
+		}
+		return nil
+	}
+
 	var agents []Agent
 	if err := json.Unmarshal(data, &agents); err != nil {
 		return fmt.Errorf("decode agent state: %w", err)
 	}
 	for _, a := range agents {
-		s.agents[a.ID] = a
+		normalized := s.normalizeLoadedAgent(a)
+		s.agents[normalized.ID] = normalized
 	}
 	return nil
 }
@@ -315,9 +483,90 @@ func (s *Service) saveLocked() error {
 		return nil
 	}
 
-	agents := make([]Agent, 0, len(s.agents))
-	for _, a := range s.agents {
-		agents = append(agents, a)
+	data, err := json.MarshalIndent(persistedState{
+		Agents: sortedAgentsFromMap(s.agents),
+	}, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode agent state: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(s.state), 0o755); err != nil {
+		return fmt.Errorf("create state dir: %w", err)
+	}
+	if err := os.WriteFile(s.state, append(data, '\n'), 0o600); err != nil {
+		return fmt.Errorf("write agent state: %w", err)
+	}
+	return nil
+}
+
+type persistedState struct {
+	Agents  []Agent        `json:"agents"`
+	Workers []legacyWorker `json:"workers,omitempty"`
+}
+
+func (s persistedState) isObject() bool {
+	return s.Agents != nil || s.Workers != nil
+}
+
+type legacyWorker struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"created_at"`
+	ModelID     string    `json:"model_id,omitempty"`
+}
+
+func (w legacyWorker) toAgent() Agent {
+	agent := Agent{
+		ID:          w.ID,
+		Name:        w.Name,
+		Description: w.Description,
+		Image:       "",
+		Role:        RoleWorker,
+		Status:      w.Status,
+		CreatedAt:   w.CreatedAt,
+		ModelID:     w.ModelID,
+	}
+	return agent
+}
+
+func (s *Service) normalizeLoadedAgent(a Agent) Agent {
+	a = *cloneAgent(&a)
+	a.Role = normalizeRole(a.Role)
+	if isManagerAgent(a) {
+		a.ID = ManagerUserID
+		a.Name = ManagerName
+		a.Role = RoleManager
+		if strings.TrimSpace(a.Image) == "" {
+			a.Image = s.managerImage
+		}
+	}
+	return a
+}
+
+func normalizeRole(role string) string {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case "", RoleAgent:
+		return RoleAgent
+	case RoleWorker:
+		return RoleWorker
+	case RoleManager:
+		return RoleManager
+	default:
+		return strings.ToLower(strings.TrimSpace(role))
+	}
+}
+
+func isManagerAgent(a Agent) bool {
+	return strings.EqualFold(strings.TrimSpace(a.Role), RoleManager) ||
+		strings.EqualFold(strings.TrimSpace(a.Name), ManagerName) ||
+		strings.EqualFold(strings.TrimSpace(a.ID), ManagerUserID)
+}
+
+func sortedAgentsFromMap(items map[string]Agent) []Agent {
+	agents := make([]Agent, 0, len(items))
+	for _, a := range items {
+		agents = append(agents, *cloneAgent(&a))
 	}
 	slices.SortFunc(agents, func(a, b Agent) int {
 		if a.CreatedAt.Equal(b.CreatedAt) {
@@ -335,37 +584,56 @@ func (s *Service) saveLocked() error {
 		}
 		return 1
 	})
-
-	data, err := json.MarshalIndent(agents, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode agent state: %w", err)
-	}
-	if err := os.MkdirAll(filepath.Dir(s.state), 0o755); err != nil {
-		return fmt.Errorf("create state dir: %w", err)
-	}
-	if err := os.WriteFile(s.state, append(data, '\n'), 0o600); err != nil {
-		return fmt.Errorf("write agent state: %w", err)
-	}
-	return nil
+	return agents
 }
 
-func (s *Service) ensureRuntime() (*boxlite.Runtime, error) {
+func (s *Service) hasNameLocked(name string) bool {
+	for _, existing := range s.agents {
+		if strings.EqualFold(existing.Name, name) {
+			return true
+		}
+	}
+	return false
+}
+
+func cloneAgent(src *Agent) *Agent {
+	if src == nil {
+		return nil
+	}
+	dst := *src
+	return &dst
+}
+
+func (s *Service) ensureRuntime(agentName string) (*boxlite.Runtime, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.runtime != nil {
-		return s.runtime, nil
+	agentName = strings.TrimSpace(agentName)
+	if agentName == "" {
+		return nil, fmt.Errorf("agent name is required")
+	}
+	if rt := s.runtimes[agentName]; rt != nil {
+		return rt, nil
 	}
 
-	opts := []boxlite.RuntimeOption{}
-	if s.homeDir != "" {
-		opts = append(opts, boxlite.WithHomeDir(s.homeDir))
+	homeDir, err := boxRuntimeHome(agentName)
+	if err != nil {
+		return nil, err
 	}
 
+	opts := []boxlite.RuntimeOption{boxlite.WithHomeDir(homeDir)}
 	rt, err := boxlite.NewRuntime(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("create boxlite runtime: %w", err)
 	}
-	s.runtime = rt
-	return s.runtime, nil
+	s.runtimes[agentName] = rt
+	return rt, nil
+}
+
+func boxRuntimeHome(agentName string) (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve host home dir: %w", err)
+	}
+	return filepath.Join(homeDir, config.AppDirName, managerAgentsDirName, agentName, config.RuntimeHomeDirName), nil
 }
