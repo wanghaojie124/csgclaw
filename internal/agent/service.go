@@ -407,6 +407,7 @@ func (s *Service) gatewayBoxOptions(name, botID, modelID string) ([]boxlite.BoxO
 	if strings.TrimSpace(modelID) == "" {
 		modelID = s.llm.ModelID
 	}
+	envVars := csgclawBoxEnvVars(resolveManagerBaseURL(s.server), s.pico.AccessToken)
 	opts := []boxlite.BoxOption{
 		boxlite.WithName(name),
 		boxlite.WithDetach(true),
@@ -419,6 +420,9 @@ func (s *Service) gatewayBoxOptions(name, botID, modelID string) ([]boxlite.BoxO
 		boxlite.WithEnv("OPENAI_BASE_URL", s.llm.BaseURL),
 		boxlite.WithEnv("OPENAI_API_KEY", s.llm.APIKey),
 		boxlite.WithEnv("OPENAI_MODEL", modelID),
+	}
+	for key, value := range envVars {
+		opts = append(opts, boxlite.WithEnv(key, value))
 	}
 	if managerDebugMode {
 		opts = append(opts,
@@ -439,6 +443,13 @@ func (s *Service) gatewayBoxOptions(name, botID, modelID string) ([]boxlite.BoxO
 	opts = append(opts, boxlite.WithVolume(hostPicoClawRoot, boxPicoClawDir))
 
 	return opts, nil
+}
+
+func csgclawBoxEnvVars(baseURL, accessToken string) map[string]string {
+	return map[string]string{
+		"CSGCLAW_BASE_URL":     baseURL,
+		"CSGCLAW_ACCESS_TOKEN": accessToken,
+	}
 }
 
 func (s *Service) load() error {

@@ -120,3 +120,14 @@ func TestBoxRuntimeHomeUsesPerAgentDirectory(t *testing.T) {
 		t.Fatalf("boxRuntimeHome() = %q, want %q", got, want)
 	}
 }
+
+func TestCSGClawBoxEnvVars(t *testing.T) {
+	got := csgclawBoxEnvVars("http://127.0.0.1:18080", "shared-token")
+
+	if got["CSGCLAW_BASE_URL"] != "http://127.0.0.1:18080" {
+		t.Fatalf("CSGCLAW_BASE_URL = %q, want %q", got["CSGCLAW_BASE_URL"], "http://127.0.0.1:18080")
+	}
+	if got["CSGCLAW_ACCESS_TOKEN"] != "shared-token" {
+		t.Fatalf("CSGCLAW_ACCESS_TOKEN = %q, want %q", got["CSGCLAW_ACCESS_TOKEN"], "shared-token")
+	}
+}
