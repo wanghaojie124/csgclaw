@@ -33,6 +33,15 @@ csgclaw onboard --base-url <url> --api-key <key> --model-id <model>
 csgclaw start
 ```
 
+执行 `csgclaw start` 后，CLI 会打印 IM 打开地址，例如：
+
+```text
+CSGClaw IM is available at: http://127.0.0.1:18080/
+Open this URL in your browser after startup.
+```
+
+把这个地址复制到浏览器中即可进入 IM 工作区。
+
 安装脚本会从 GitHub Releases 下载预编译二进制，并把它放到你的 `PATH` 目录中。目前只提供 macOS arm64 和 Linux amd64 的预编译版本。
 
 源码编译：

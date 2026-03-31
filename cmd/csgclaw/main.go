@@ -154,6 +154,10 @@ func serveForeground(cfg config.Config) error {
 		return err
 	}
 	imBus := im.NewBus()
+	imURL := imOpenURL(cfg.Server.APIBaseURL)
+
+	fmt.Printf("CSGClaw IM is available at: %s\n", imURL)
+	fmt.Println("Open this URL in your browser after startup.")
 
 	return server.Run(server.Options{
 		ListenAddr: cfg.Server.ListenAddr,
@@ -199,6 +203,7 @@ func serveBackground(cfg config.Config) error {
 	}
 
 	fmt.Printf("server started in background (pid %d)\n", cmd.Process.Pid)
+	fmt.Printf("im: %s\n", imOpenURL(cfg.Server.APIBaseURL))
 	fmt.Printf("api: %s\n", cfg.Server.APIBaseURL)
 	fmt.Printf("log: %s\n", logPath)
 	return nil
@@ -271,6 +276,10 @@ func waitForHealthy(apiBaseURL string, timeout time.Duration) error {
 		lastErr = errors.New("timed out")
 	}
 	return lastErr
+}
+
+func imOpenURL(apiBaseURL string) string {
+	return strings.TrimRight(apiBaseURL, "/") + "/"
 }
 
 func newAgentService(cfg config.Config) (*agent.Service, error) {

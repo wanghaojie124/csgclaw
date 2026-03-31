@@ -33,6 +33,15 @@ csgclaw onboard --base-url <url> --api-key <key> --model-id <model>
 csgclaw start
 ```
 
+After `csgclaw start`, the CLI will print the IM URL, for example:
+
+```text
+CSGClaw IM is available at: http://127.0.0.1:18080/
+Open this URL in your browser after startup.
+```
+
+Open that address in your browser to enter the IM workspace.
+
 The installer downloads a prebuilt release binary from GitHub Releases and places it on your `PATH`. Prebuilt binaries are currently available for macOS arm64 and Linux amd64.
 
 Build from source:
