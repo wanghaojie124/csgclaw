@@ -28,7 +28,7 @@ csgclaw onboard \
   --base-url http://127.0.0.1:4000 \
   --api-key sk-please-change-me \
   --model-id gpt-4o-mini \
-  --manager-image ghcr.io/russellluo/picoclaw:2026.3.27
+  --manager-image ghcr.io/russellluo/picoclaw:2026.3.31.6
 ```
 
 参数含义：
@@ -101,7 +101,7 @@ curl -X POST \
 
 说明：
 
-- 创建时会真正拉起一个 box，镜像和启动方式与 manager 相同，都会运行 `picoclaw gateway`
+- 创建时会真正拉起一个 box，镜像和启动方式与 manager 相同，非调试模式下会运行 `picoclaw gateway -d`
 - 会为 worker 自动生成独立的 PicoClaw 配置目录，`bot_id` 使用请求里的 `id`
 - 会自动在 IM 中创建对应 user / bot 身份，并创建一个 `Admin & <Worker>` bootstrap 私聊
 - `name` 必须唯一，大小写不敏感；且不能为 `manager`
@@ -221,7 +221,7 @@ api_key = "sk-please-change-me"
 model_id = "gpt-4o-mini"
 
 [bootstrap]
-manager_image = "ghcr.io/russellluo/picoclaw:2026.3.27"
+manager_image = "ghcr.io/russellluo/picoclaw:2026.3.31.6"
 
 [picoclaw]
 access_token = "your-shared-token"

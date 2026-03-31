@@ -48,7 +48,7 @@ const (
 	DefaultLLMAPIKey           = "sk-1234567890"
 	DefaultLLMModelID          = "minimax-m2.7"
 	DefaultPicoClawAccessToken = "your_access_token"
-	DefaultManagerImage        = "ghcr.io/russellluo/picoclaw:2026.3.27"
+	DefaultManagerImage        = "ghcr.io/russellluo/picoclaw:2026.3.31.6"
 )
 
 func DefaultDir() (string, error) {

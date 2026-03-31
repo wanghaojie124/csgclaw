@@ -121,13 +121,96 @@ func TestBoxRuntimeHomeUsesPerAgentDirectory(t *testing.T) {
 	}
 }
 
-func TestCSGClawBoxEnvVars(t *testing.T) {
-	got := csgclawBoxEnvVars("http://127.0.0.1:18080", "shared-token")
+func TestEnsureAgentProjectsRootUsesHomeProjectsDir(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
 
-	if got["CSGCLAW_BASE_URL"] != "http://127.0.0.1:18080" {
-		t.Fatalf("CSGCLAW_BASE_URL = %q, want %q", got["CSGCLAW_BASE_URL"], "http://127.0.0.1:18080")
+	got, err := ensureAgentProjectsRoot()
+	if err != nil {
+		t.Fatalf("ensureAgentProjectsRoot() error = %v", err)
 	}
-	if got["CSGCLAW_ACCESS_TOKEN"] != "shared-token" {
-		t.Fatalf("CSGCLAW_ACCESS_TOKEN = %q, want %q", got["CSGCLAW_ACCESS_TOKEN"], "shared-token")
+
+	want := filepath.Join(homeDir, config.AppDirName, hostProjectsDir)
+	if got != want {
+		t.Fatalf("ensureAgentProjectsRoot() = %q, want %q", got, want)
+	}
+
+	info, err := os.Stat(got)
+	if err != nil {
+		t.Fatalf("os.Stat() error = %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("ensureAgentProjectsRoot() path is not a directory: %q", got)
+	}
+}
+
+func TestGatewayStartCommandUsesTiniForNormalMode(t *testing.T) {
+	entrypoint, cmd := gatewayStartCommand(false)
+
+	if strings.Join(entrypoint, " ") != "tini" {
+		t.Fatalf("gatewayStartCommand(false) entrypoint = %q, want %q", entrypoint, []string{"tini"})
+	}
+	if strings.Join(cmd, " ") != "-- picoclaw gateway -d" {
+		t.Fatalf("gatewayStartCommand(false) cmd = %q, want %q", cmd, []string{"--", "picoclaw", "gateway", "-d"})
+	}
+}
+
+func TestGatewayStartCommandKeepsDebugSleepMode(t *testing.T) {
+	entrypoint, cmd := gatewayStartCommand(true)
+
+	if strings.Join(entrypoint, " ") != "sleep" {
+		t.Fatalf("gatewayStartCommand(true) entrypoint = %q, want %q", entrypoint, []string{"sleep"})
+	}
+	if strings.Join(cmd, " ") != "infinity" {
+		t.Fatalf("gatewayStartCommand(true) cmd = %q, want %q", cmd, []string{"infinity"})
+	}
+}
+
+func TestPicoclawBoxEnvVars(t *testing.T) {
+	got := picoclawBoxEnvVars(
+		"http://10.0.0.8:18080",
+		"shared-token",
+		"u-worker-1",
+		config.LLMConfig{
+			BaseURL: "http://127.0.0.1:4000",
+			APIKey:  "sk-test",
+			ModelID: "minimax-m2.7",
+		},
+	)
+
+	wants := map[string]string{
+		"CSGCLAW_BASE_URL":                       "http://10.0.0.8:18080",
+		"CSGCLAW_ACCESS_TOKEN":                   "shared-token",
+		"PICOCLAW_CHANNELS_CSGCLAW_BASE_URL":     "http://10.0.0.8:18080",
+		"PICOCLAW_CHANNELS_CSGCLAW_ACCESS_TOKEN": "shared-token",
+		"PICOCLAW_CHANNELS_CSGCLAW_BOT_ID":       "u-worker-1",
+		"PICOCLAW_AGENTS_DEFAULTS_MODEL_NAME":    "minimax-m2.7",
+		"PICOCLAW_CUSTOM_MODEL_NAME":             "minimax-m2.7",
+		"PICOCLAW_CUSTOM_MODEL_ID":               "minimax-m2.7",
+		"PICOCLAW_CUSTOM_MODEL_API_KEY":          "sk-test",
+		"PICOCLAW_CUSTOM_MODEL_BASE_URL":         "http://127.0.0.1:4000",
+	}
+	for key, want := range wants {
+		if got[key] != want {
+			t.Fatalf("%s = %q, want %q", key, got[key], want)
+		}
+	}
+}
+
+func TestResolveManagerBaseURLPrefersEn0IP(t *testing.T) {
+	orig := en0IPv4Resolver
+	en0IPv4Resolver = func() string { return "10.0.0.8" }
+	t.Cleanup(func() {
+		en0IPv4Resolver = orig
+	})
+
+	got := resolveManagerBaseURL(config.ServerConfig{
+		ListenAddr: "0.0.0.0:19090",
+		APIBaseURL: "http://127.0.0.1:18080",
+	})
+
+	want := "http://10.0.0.8:19090"
+	if got != want {
+		t.Fatalf("resolveManagerBaseURL() = %q, want %q", got, want)
 	}
 }

@@ -74,7 +74,7 @@ ok
   "status": "running",
   "created_at": "2026-03-28T12:00:03Z",
   "model_id": "gpt-4o-mini",
-  "image": "ghcr.io/russellluo/picoclaw:2026.3.27"
+  "image": "ghcr.io/russellluo/picoclaw:2026.3.31.6"
 }
 ```
 

@@ -134,7 +134,7 @@ func resolveManagerBaseURL(server config.ServerConfig) string {
 			port = resolvedPort
 		}
 	}
-	if ip := en0IPv4(); ip != "" {
+	if ip := en0IPv4Resolver(); ip != "" {
 		return fmt.Sprintf("http://%s:%s", ip, port)
 	}
 	if server.APIBaseURL != "" {

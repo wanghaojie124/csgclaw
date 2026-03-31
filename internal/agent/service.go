@@ -50,12 +50,16 @@ const (
 	ManagerUserID      = "u-manager"
 	managerHostPort    = 18790
 	managerGuestPort   = 18790
-	managerDebugMode   = false
+	managerDebugMode   = true
 	hostPicoClawDir    = ".picoclaw"
+	hostProjectsDir    = "projects"
 	hostPicoClawConfig = "config.json"
 	hostPicoClawLogs   = "logs"
 	boxPicoClawDir     = "/home/picoclaw/.picoclaw"
+	boxProjectsDir     = "/home/picoclaw/.picoclaw/workspace/projects"
 )
+
+var en0IPv4Resolver = en0IPv4
 
 type Service struct {
 	llm          config.LLMConfig
@@ -122,11 +126,8 @@ func EnsureBootstrapState(ctx context.Context, statePath, runtimeHome string, se
 	} else {
 		box, err = rt.Get(ctx, ManagerName)
 	}
+	var info *boxlite.BoxInfo
 	if box == nil {
-		boxOpts, err := svc.gatewayBoxOptions(ManagerName, ManagerUserID, llm.ModelID)
-		if err != nil {
-			return err
-		}
 		log.Printf("bootstrap manager box %q not found, creating it with image %q", ManagerName, svc.managerImage)
 		log.Printf("if the image is not present locally, the first pull may take a while")
 		progressDone := make(chan struct{})
@@ -142,25 +143,24 @@ func EnsureBootstrapState(ctx context.Context, statePath, runtimeHome string, se
 				}
 			}
 		}()
-		box, err = rt.Create(ctx, svc.managerImage, boxOpts...)
+		box, info, err = svc.createGatewayBox(ctx, rt, svc.managerImage, ManagerName, ManagerUserID, llm.ModelID)
 		close(progressDone)
 		if err != nil {
 			return fmt.Errorf("create bootstrap manager box: %w", err)
 		}
 		log.Printf("bootstrap manager box %q created", ManagerName)
+	} else {
+		if err := box.Start(ctx); err != nil {
+			return fmt.Errorf("start bootstrap manager box: %w", err)
+		}
+		info, err = box.Info(ctx)
+		if err != nil {
+			return fmt.Errorf("read bootstrap manager box info: %w", err)
+		}
 	}
 
 	svc.mu.Lock()
 	defer svc.mu.Unlock()
-
-	if err := box.Start(ctx); err != nil {
-		return fmt.Errorf("start bootstrap manager box: %w", err)
-	}
-
-	info, err := box.Info(ctx)
-	if err != nil {
-		return fmt.Errorf("read bootstrap manager box info: %w", err)
-	}
 
 	manager := Agent{
 		ID:        ManagerUserID,
@@ -224,6 +224,10 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (Agent, error) 
 		modelID = s.llm.ModelID
 	}
 
+	projectsRoot, err := ensureAgentProjectsRoot()
+	if err != nil {
+		return Agent{}, err
+	}
 	box, err := rt.Create(ctx, image,
 		boxlite.WithName(name),
 		boxlite.WithAutoRemove(false),
@@ -233,6 +237,7 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (Agent, error) 
 		boxlite.WithEnv("OPENAI_BASE_URL", s.llm.BaseURL),
 		boxlite.WithEnv("OPENAI_API_KEY", s.llm.APIKey),
 		boxlite.WithEnv("OPENAI_MODEL", modelID),
+		boxlite.WithVolume(projectsRoot, boxProjectsDir),
 	)
 	if err != nil {
 		return Agent{}, fmt.Errorf("create boxlite agent: %w", err)
@@ -298,7 +303,8 @@ func (s *Service) CreateWorker(ctx context.Context, req CreateRequest) (Agent, e
 		return Agent{}, fmt.Errorf("name %q is reserved", name)
 	}
 	if id == "" {
-		id = fmt.Sprintf("%s-%d", RoleWorker, time.Now().UnixNano())
+		// id = fmt.Sprintf("%s-%d", RoleWorker, time.Now().UnixNano())
+		id = fmt.Sprintf("u-%s", name)
 	}
 
 	s.mu.RLock()
@@ -323,20 +329,9 @@ func (s *Service) CreateWorker(ctx context.Context, req CreateRequest) (Agent, e
 		modelID = s.llm.ModelID
 	}
 
-	boxOpts, err := s.gatewayBoxOptions(name, id, modelID)
-	if err != nil {
-		return Agent{}, err
-	}
-	box, err := rt.Create(ctx, s.managerImage, boxOpts...)
+	box, info, err := s.createGatewayBox(ctx, rt, s.managerImage, name, id, modelID)
 	if err != nil {
 		return Agent{}, fmt.Errorf("create worker box: %w", err)
-	}
-	if err := box.Start(ctx); err != nil {
-		return Agent{}, fmt.Errorf("start worker box: %w", err)
-	}
-	info, err := box.Info(ctx)
-	if err != nil {
-		return Agent{}, fmt.Errorf("read worker box info: %w", err)
 	}
 
 	s.mu.Lock()
@@ -370,6 +365,27 @@ func (s *Service) CreateWorker(ctx context.Context, req CreateRequest) (Agent, e
 		return Agent{}, err
 	}
 	return *cloneAgent(&worker), nil
+}
+
+func (s *Service) createGatewayBox(ctx context.Context, rt *boxlite.Runtime, image, name, botID, modelID string) (*boxlite.Box, *boxlite.BoxInfo, error) {
+	boxOpts, err := s.gatewayBoxOptions(name, botID, modelID)
+	if err != nil {
+		return nil, nil, err
+	}
+	box, err := rt.Create(ctx, image, boxOpts...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("create gateway box: %w", err)
+	}
+	if err := box.Start(ctx); err != nil {
+		_ = box.Close()
+		return nil, nil, fmt.Errorf("start gateway box: %w", err)
+	}
+	info, err := box.Info(ctx)
+	if err != nil {
+		_ = box.Close()
+		return nil, nil, fmt.Errorf("read gateway box info: %w", err)
+	}
+	return box, info, nil
 }
 
 func (s *Service) ListWorkers() []Agent {
@@ -407,7 +423,7 @@ func (s *Service) gatewayBoxOptions(name, botID, modelID string) ([]boxlite.BoxO
 	if strings.TrimSpace(modelID) == "" {
 		modelID = s.llm.ModelID
 	}
-	envVars := csgclawBoxEnvVars(resolveManagerBaseURL(s.server), s.pico.AccessToken)
+	envVars := picoclawBoxEnvVars(resolveManagerBaseURL(s.server), s.pico.AccessToken, botID, s.llm)
 	opts := []boxlite.BoxOption{
 		boxlite.WithName(name),
 		boxlite.WithDetach(true),
@@ -424,31 +440,59 @@ func (s *Service) gatewayBoxOptions(name, botID, modelID string) ([]boxlite.BoxO
 	for key, value := range envVars {
 		opts = append(opts, boxlite.WithEnv(key, value))
 	}
-	if managerDebugMode {
-		opts = append(opts,
-			boxlite.WithEntrypoint("sleep"),
-			boxlite.WithCmd("infinity"),
-		)
-	} else {
-		opts = append(opts,
-			boxlite.WithEntrypoint("picoclaw"),
-			boxlite.WithCmd("gateway"),
-		)
-	}
+	//entrypoint, cmd := gatewayStartCommand(managerDebugMode)
+	opts = append(opts,
+		//boxlite.WithEntrypoint(entrypoint...),
+		//boxlite.WithCmd(cmd...),
+		boxlite.WithCmd("/bin/sh", "-c", "/usr/local/bin/picoclaw gateway -d 1>~/.picoclaw/gateway.log 2>/dev/null"),
+		//boxlite.WithCmd("sleep", "infinity"),
+	)
 
-	hostPicoClawRoot, err := ensureAgentPicoClawConfig(name, botID, s.server, s.llm, s.pico)
+	//hostPicoClawRoot, err := ensureAgentPicoClawConfig(name, botID, s.server, s.llm, s.pico)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//opts = append(opts, boxlite.WithVolume(hostPicoClawRoot, boxPicoClawDir))
+	projectsRoot, err := ensureAgentProjectsRoot()
 	if err != nil {
 		return nil, err
 	}
-	opts = append(opts, boxlite.WithVolume(hostPicoClawRoot, boxPicoClawDir))
+	opts = append(opts, boxlite.WithVolume(projectsRoot, boxProjectsDir))
 
 	return opts, nil
 }
 
-func csgclawBoxEnvVars(baseURL, accessToken string) map[string]string {
+func gatewayStartCommand(debug bool) ([]string, []string) {
+	if debug {
+		return []string{"sleep"}, []string{"infinity"}
+	}
+	return []string{"tini"}, []string{"--", "picoclaw", "gateway", "-d"}
+}
+
+func ensureAgentProjectsRoot() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve host home dir: %w", err)
+	}
+	hostProjectsRoot := filepath.Join(homeDir, config.AppDirName, hostProjectsDir)
+	if err := os.MkdirAll(hostProjectsRoot, 0o755); err != nil {
+		return "", fmt.Errorf("create host projects dir: %w", err)
+	}
+	return hostProjectsRoot, nil
+}
+
+func picoclawBoxEnvVars(baseURL, accessToken, botID string, llm config.LLMConfig) map[string]string {
 	return map[string]string{
-		"CSGCLAW_BASE_URL":     baseURL,
-		"CSGCLAW_ACCESS_TOKEN": accessToken,
+		"CSGCLAW_BASE_URL":                       baseURL,
+		"CSGCLAW_ACCESS_TOKEN":                   accessToken,
+		"PICOCLAW_CHANNELS_CSGCLAW_BASE_URL":     baseURL,
+		"PICOCLAW_CHANNELS_CSGCLAW_ACCESS_TOKEN": accessToken,
+		"PICOCLAW_CHANNELS_CSGCLAW_BOT_ID":       botID,
+		"PICOCLAW_AGENTS_DEFAULTS_MODEL_NAME":    llm.ModelID,
+		"PICOCLAW_CUSTOM_MODEL_NAME":             llm.ModelID,
+		"PICOCLAW_CUSTOM_MODEL_ID":               llm.ModelID,
+		"PICOCLAW_CUSTOM_MODEL_API_KEY":          llm.APIKey,
+		"PICOCLAW_CUSTOM_MODEL_BASE_URL":         llm.BaseURL,
 	}
 }
 
