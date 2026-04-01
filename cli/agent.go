@@ -14,11 +14,59 @@ func (a *App) runAgent(ctx context.Context, args []string, globals GlobalOptions
 	}
 
 	switch args[0] {
+	case "create":
+		return a.runAgentCreate(ctx, args[1:], globals)
+	case "delete":
+		return a.runAgentDelete(ctx, args[1:], globals)
 	case "status":
 		return a.runAgentStatus(ctx, args[1:], globals)
 	default:
 		return fmt.Errorf("unknown agent subcommand %q", args[0])
 	}
+}
+
+func (a *App) runAgentCreate(ctx context.Context, args []string, globals GlobalOptions) error {
+	fs := flag.NewFlagSet("agent create", flag.ContinueOnError)
+	fs.SetOutput(a.stderr)
+
+	id := fs.String("id", "", "agent id")
+	name := fs.String("name", "", "agent name")
+	description := fs.String("description", "", "agent description")
+	modelID := fs.String("model-id", "", "agent model identifier")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if len(fs.Args()) != 0 {
+		return fmt.Errorf("agent create does not accept positional arguments")
+	}
+
+	client := NewAPIClient(globals.Endpoint, globals.Token, a.httpClient)
+	created, err := client.CreateAgent(ctx, agent.CreateRequest{
+		ID:          *id,
+		Name:        *name,
+		Description: *description,
+		ModelID:     *modelID,
+	})
+	if err != nil {
+		return err
+	}
+	return a.renderAgents(globals.Output, []agent.Agent{created})
+}
+
+func (a *App) runAgentDelete(ctx context.Context, args []string, globals GlobalOptions) error {
+	fs := flag.NewFlagSet("agent delete", flag.ContinueOnError)
+	fs.SetOutput(a.stderr)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	rest := fs.Args()
+	if len(rest) != 1 {
+		return fmt.Errorf("agent delete requires exactly one id")
+	}
+
+	client := NewAPIClient(globals.Endpoint, globals.Token, a.httpClient)
+	return client.DeleteAgent(ctx, rest[0])
 }
 
 func (a *App) runAgentStatus(ctx context.Context, args []string, globals GlobalOptions) error {

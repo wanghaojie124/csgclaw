@@ -17,6 +17,8 @@ type App struct {
 	serveFunc  func(context.Context, []string, GlobalOptions) error
 	stopFunc   func([]string, GlobalOptions) error
 	agentFunc  func(context.Context, []string, GlobalOptions) error
+	roomFunc   func(context.Context, []string, GlobalOptions) error
+	userFunc   func(context.Context, []string, GlobalOptions) error
 }
 
 type GlobalOptions struct {
@@ -62,6 +64,16 @@ func (a *App) Execute(ctx context.Context, args []string) error {
 			return a.agentFunc(ctx, rest[1:], globals)
 		}
 		return a.runAgent(ctx, rest[1:], globals)
+	case "room":
+		if a.roomFunc != nil {
+			return a.roomFunc(ctx, rest[1:], globals)
+		}
+		return a.runRoom(ctx, rest[1:], globals)
+	case "user":
+		if a.userFunc != nil {
+			return a.userFunc(ctx, rest[1:], globals)
+		}
+		return a.runUser(ctx, rest[1:], globals)
 	case "_serve":
 		return a.runInternalServe(ctx, rest[1:], globals)
 	default:
@@ -124,7 +136,14 @@ Usage:
   csgclaw serve [-d|--daemon] [flags]
   csgclaw start [-d|--daemon] [flags]
   csgclaw stop [flags]
+  csgclaw agent create [flags]
+  csgclaw agent delete <id> [flags]
   csgclaw agent status [id] [flags]
+  csgclaw room list [flags]
+  csgclaw room create [flags]
+  csgclaw room delete <id> [flags]
+  csgclaw user list [flags]
+  csgclaw user kick <id> [flags]
 
 Global flags:
   --endpoint string   HTTP server endpoint

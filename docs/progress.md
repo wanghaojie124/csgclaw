@@ -31,23 +31,43 @@
 ### A01. CLI 命令树与目标架构不一致
 
 - `目标`：单独的 CLI 层，命令树为 `serve`、`stop`、`agent/*`、`room/*`、`user/*`、`message/*`，且非 `serve` 命令都通过 HTTP 调用服务端。
-- `现状`：[`cmd/csgclaw/main.go`](/Users/russellluo/Projects/work/opencsg/projects/csgclaw/cmd/csgclaw/main.go) 里只有 `onboard`、`start`、`_serve`；没有资源型子命令，也没有独立 CLI 包。
+- `现状`：[`cmd/csgclaw/main.go`](/Users/russellluo/Projects/work/opencsg/projects/csgclaw/cmd/csgclaw/main.go) 已切到 `cli.New().Execute(...)`；[`cli/`](/Users/russellluo/Projects/work/opencsg/projects/csgclaw/cli) 中已经补齐 `agent create/delete/status`、`room list/create/delete`、`user list/kick`，`message` 命令树和 `agent logs` 仍未实现。
 - `影响`：CLI 和服务端生命周期耦合，后续很难平滑过渡到“远程可调用”的命令模型。
 - `推荐增量步骤`：
   - [x] A01-1 新增 `serve` 命令，内部先复用当前 `start` 逻辑，保留 `start` 作为兼容别名。
   - [x] A01-2 新增 `stop` 命令，先基于当前后台进程管理方式落地，哪怕暂时仍沿用现有状态目录。
   - [x] A01-3 引入 `cli/` 目录并抽出 root/serve/stop 的命令注册，`main.go` 只保留启动装配。
   - [x] A01-4 为后续资源型命令准备统一 HTTP client 和全局 flag 骨架。
+  - [x] A01-5 补齐 `agent create`、`agent delete`，不要再把 `agent` 仅停留在 `status` 只读子命令。
+  - [x] A01-6 新增 `room list/create/delete` 命令文件与注册逻辑，全部走 `/api/v1/rooms`。
+  - [x] A01-7 新增 `user list/kick` 命令文件与注册逻辑，全部走 `/api/v1/users`。
+  - [x] A01-8 更新 [`cli/app.go`](/Users/russellluo/Projects/work/opencsg/projects/csgclaw/cli/app.go) 的 usage，明确暴露 `agent`、`room`、`user` 命令树，避免文档已完成但二进制帮助信息仍不可见。
+  - [ ] A01-9 补齐 `agent logs`。
+补充核对（2026-04-01）：
+
+- [`cli/agent.go`](/Users/russellluo/Projects/work/opencsg/projects/csgclaw/cli/agent.go) 已补齐 `agent create`、`agent delete` 和原有 `agent status`，当前剩余缺口是 `agent logs`。
+- [`cli/room.go`](/Users/russellluo/Projects/work/opencsg/projects/csgclaw/cli/room.go) 与 [`cli/user.go`](/Users/russellluo/Projects/work/opencsg/projects/csgclaw/cli/user.go) 已新增，分别承载 `room` 与 `user` 命令树。
+- [`cli/app.go`](/Users/russellluo/Projects/work/opencsg/projects/csgclaw/cli/app.go) 已注册 `room`、`user` 顶层入口，并在 usage 中暴露对应子命令。
 
 ### A02. CLI 还不是“纯 HTTP 客户端”
 
 - `目标`：除 `serve` 外，CLI 不直接操作本地服务对象、文件系统或 Boxlite。
-- `现状`：当前 CLI 没有资源型命令；入口本身直接装配 `agent.Service`、`im.Service` 并启动 HTTP server。
+- `现状`：除 `serve`/`stop` 外，当前 CLI 资源命令已经统一通过 [`cli/http_client.go`](/Users/russellluo/Projects/work/opencsg/projects/csgclaw/cli/http_client.go) 发起 HTTP 请求；已覆盖 `CreateAgent/DeleteAgent/ListRooms/CreateRoom/DeleteRoom/ListUsers/KickUser`，`GetAgentLogs` 仍未补齐。
 - `影响`：一旦补 `agent/room/user/message` 命令，如果继续直接调内部服务，会和目标架构背离得更远。
 - `推荐增量步骤`：
   - [x] A02-1 在 `cli/` 层先定义最小 HTTP client 接口，即使最开始只服务 `agent status` 或 `room list` 这类只读命令。
   - [x] A02-2 第一个资源命令只走 HTTP，不允许偷接内部 package。
   - [x] A02-3 给 CLI 增加 endpoint/token/output/config 四个全局入口，先允许部分 flag 未使用，但参数形态先稳定下来。
+  - [x] A02-4 在 [`cli/http_client.go`](/Users/russellluo/Projects/work/opencsg/projects/csgclaw/cli/http_client.go) 中补齐 `CreateAgent/DeleteAgent/GetAgentLogs/ListRooms/CreateRoom/DeleteRoom/ListUsers/KickUser` 等方法，避免后续命令继续各自拼 URL。
+  - [x] A02-5 把各资源命令的请求/响应格式固定到 CLI 层，并补 table/json 的最小渲染实现；至少让 `room list`、`user list` 和 `agent status` 的输出风格一致。
+  - [x] A02-6 为新增资源命令补 CLI 级测试，优先覆盖“是否发往正确 HTTP 路径”和“全局 flag 是否生效”，防止只接上命令名但没有真正走 HTTP。
+  - [x] A02-7 在 [`cli/http_client.go`](/Users/russellluo/Projects/work/opencsg/projects/csgclaw/cli/http_client.go) 中补齐 `GetAgentLogs` 方法
+
+补充核对（2026-04-01）：
+
+- [`cli/http_client.go`](/Users/russellluo/Projects/work/opencsg/projects/csgclaw/cli/http_client.go) 已提供 `CreateAgent`、`DeleteAgent`、`GetAgentLogs`、`ListRooms`、`CreateRoom`、`DeleteRoom`、`ListUsers`、`KickUser` 等资源方法；当前剩余缺口是 `agent logs` 子命令入口尚未接上该方法。
+- [`cli/http_client.go`](/Users/russellluo/Projects/work/opencsg/projects/csgclaw/cli/http_client.go) 已统一错误提取逻辑，并补了房间/用户表格渲染，资源命令的输出风格已基本对齐。
+- [`cli/app_test.go`](/Users/russellluo/Projects/work/opencsg/projects/csgclaw/cli/app_test.go) 已补覆盖新增命令、usage 文案以及 API 错误消息提取的 CLI 级测试。
 
 ### A03. HTTP 健康检查路径不一致
 
