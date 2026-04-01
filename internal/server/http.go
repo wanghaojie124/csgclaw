@@ -30,6 +30,35 @@ type HTTPServer struct {
 	picoclaw *im.PicoClawBridge
 }
 
+type imBootstrapResponse struct {
+	CurrentUserID      string    `json:"current_user_id"`
+	Users              []im.User `json:"users"`
+	Rooms              []im.Room `json:"rooms"`
+	InviteDraftUserIDs []string  `json:"invite_draft_user_ids,omitempty"`
+}
+
+type imEventResponse struct {
+	Type    string      `json:"type"`
+	RoomID  string      `json:"room_id,omitempty"`
+	Room    *im.Room    `json:"room,omitempty"`
+	User    *im.User    `json:"user,omitempty"`
+	Message *im.Message `json:"message,omitempty"`
+	Sender  *im.User    `json:"sender,omitempty"`
+}
+
+type createMessageRequest struct {
+	RoomID   string `json:"room_id"`
+	SenderID string `json:"sender_id"`
+	Content  string `json:"content"`
+}
+
+type addRoomMembersRequest struct {
+	RoomID    string   `json:"room_id"`
+	InviterID string   `json:"inviter_id"`
+	UserIDs   []string `json:"user_ids"`
+	Locale    string   `json:"locale"`
+}
+
 func Run(opts Options) error {
 	if opts.Context == nil {
 		opts.Context = context.Background()
@@ -92,7 +121,7 @@ func (s *HTTPServer) routes() http.Handler {
 	mux.HandleFunc("/api/v1/events", s.handleIMEvents)
 	mux.HandleFunc("/api/v1/rooms", s.handleRooms)
 	mux.HandleFunc("/api/v1/rooms/", s.handleRoomByID)
-	mux.HandleFunc("/api/v1/rooms/invite", s.handleIMConversationMembers)
+	mux.HandleFunc("/api/v1/rooms/invite", s.handleIMRoomMembers)
 	mux.HandleFunc("/api/v1/users", s.handleUsers)
 	mux.HandleFunc("/api/v1/users/", s.handleUserByID)
 	mux.HandleFunc("/api/v1/messages", s.handleMessages)
@@ -101,10 +130,10 @@ func (s *HTTPServer) routes() http.Handler {
 	mux.HandleFunc("/api/v1/im/bootstrap", s.handleIMBootstrap)
 	mux.HandleFunc("/api/v1/im/events", s.handleIMEvents)
 	mux.HandleFunc("/api/v1/im/messages", s.handleIMMessages)
-	mux.HandleFunc("/api/v1/im/conversations", s.handleIMConversations)
-	mux.HandleFunc("/api/v1/im/conversations/members", s.handleIMConversationMembers)
-	mux.HandleFunc("/api/v1/im/rooms", s.handleIMConversations)
-	mux.HandleFunc("/api/v1/im/rooms/invite", s.handleIMConversationMembers)
+	mux.HandleFunc("/api/v1/im/conversations", s.handleIMRooms)
+	mux.HandleFunc("/api/v1/im/conversations/members", s.handleIMRoomMembers)
+	mux.HandleFunc("/api/v1/im/rooms", s.handleIMRooms)
+	mux.HandleFunc("/api/v1/im/rooms/invite", s.handleIMRoomMembers)
 	mux.HandleFunc("/api/bots/", s.handlePicoClawBotRoutes)
 	mux.Handle("/", uiHandler())
 	return mux
@@ -242,13 +271,13 @@ func (s *HTTPServer) handleIMAgentJoin(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(req.InviterID) == "" {
 		req.InviterID = "u-admin"
 	}
-	conversation, err := s.im.AddAgentToConversation(req)
+	room, err := s.im.AddAgentToRoom(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.publishConversationEvent(im.EventTypeConversationMembersAdded, conversation)
-	writeJSON(w, http.StatusOK, conversation)
+	s.publishRoomEvent(im.EventTypeRoomMembersAdded, room)
+	writeJSON(w, http.StatusOK, room)
 }
 
 func (s *HTTPServer) handleIMBootstrap(w http.ResponseWriter, r *http.Request) {
@@ -256,7 +285,7 @@ func (s *HTTPServer) handleIMBootstrap(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.im.Bootstrap())
+	writeJSON(w, http.StatusOK, presentBootstrap(s.im.Bootstrap()))
 }
 
 func (s *HTTPServer) handleRooms(w http.ResponseWriter, r *http.Request) {
@@ -294,13 +323,13 @@ func (s *HTTPServer) handleMessages(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		conversationID, err := conversationIDFromQuery(r)
+		roomID, err := roomIDFromQuery(r)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		messages, err := s.im.ListMessages(conversationID)
+		messages, err := s.im.ListMessages(roomID)
 		if err != nil {
 			if strings.Contains(err.Error(), "not found") {
 				http.Error(w, err.Error(), http.StatusNotFound)
@@ -331,7 +360,7 @@ func (s *HTTPServer) handleRoomByID(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodDelete:
-		if err := s.im.DeleteConversation(id); err != nil {
+		if err := s.im.DeleteRoom(id); err != nil {
 			if strings.Contains(err.Error(), "not found") {
 				http.Error(w, "room not found", http.StatusNotFound)
 				return
@@ -378,35 +407,41 @@ func (s *HTTPServer) handleUserByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *HTTPServer) handleCreateMessage(w http.ResponseWriter, r *http.Request) {
-	var req im.CreateMessageRequest
+	var req createMessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, fmt.Sprintf("decode request: %v", err), http.StatusBadRequest)
 		return
 	}
 
-	message, err := s.im.CreateMessage(req)
+	serviceReq, err := req.toServiceRequest()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.publishMessageCreated(req.ConversationID, req.SenderID, message)
+
+	message, err := s.im.CreateMessage(serviceReq)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.publishMessageCreated(serviceReq.RoomID, serviceReq.SenderID, message)
 	writeJSON(w, http.StatusCreated, message)
 }
 
 func (s *HTTPServer) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
-	var req im.CreateConversationRequest
+	var req im.CreateRoomRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, fmt.Sprintf("decode request: %v", err), http.StatusBadRequest)
 		return
 	}
 
-	conversation, err := s.im.CreateConversation(req)
+	room, err := s.im.CreateRoom(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.publishConversationEvent(im.EventTypeConversationCreated, conversation)
-	writeJSON(w, http.StatusCreated, conversation)
+	s.publishRoomEvent(im.EventTypeRoomCreated, room)
+	writeJSON(w, http.StatusCreated, room)
 }
 
 func (s *HTTPServer) handleIMMessages(w http.ResponseWriter, r *http.Request) {
@@ -417,7 +452,7 @@ func (s *HTTPServer) handleIMMessages(w http.ResponseWriter, r *http.Request) {
 	s.handleCreateMessage(w, r)
 }
 
-func (s *HTTPServer) handleIMConversations(w http.ResponseWriter, r *http.Request) {
+func (s *HTTPServer) handleIMRooms(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -425,25 +460,31 @@ func (s *HTTPServer) handleIMConversations(w http.ResponseWriter, r *http.Reques
 	s.handleCreateRoom(w, r)
 }
 
-func (s *HTTPServer) handleIMConversationMembers(w http.ResponseWriter, r *http.Request) {
+func (s *HTTPServer) handleIMRoomMembers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var req im.AddConversationMembersRequest
+	var req addRoomMembersRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, fmt.Sprintf("decode request: %v", err), http.StatusBadRequest)
 		return
 	}
 
-	conversation, err := s.im.AddConversationMembers(req)
+	serviceReq, err := req.toServiceRequest()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.publishConversationEvent(im.EventTypeConversationMembersAdded, conversation)
-	writeJSON(w, http.StatusOK, conversation)
+
+	room, err := s.im.AddRoomMembers(serviceReq)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.publishRoomEvent(im.EventTypeRoomMembersAdded, room)
+	writeJSON(w, http.StatusOK, room)
 }
 
 func (s *HTTPServer) handleIMEvents(w http.ResponseWriter, r *http.Request) {
@@ -480,7 +521,7 @@ func (s *HTTPServer) handleIMEvents(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			data, err := json.Marshal(evt)
+			data, err := json.Marshal(presentEvent(evt))
 			if err != nil {
 				return
 			}
@@ -628,19 +669,59 @@ func sanitizeHandle(input string) (string, bool) {
 	return b.String(), true
 }
 
-func conversationIDFromQuery(r *http.Request) (string, error) {
-	conversationID := strings.TrimSpace(r.URL.Query().Get("conversation_id"))
+func roomIDFromQuery(r *http.Request) (string, error) {
 	roomID := strings.TrimSpace(r.URL.Query().Get("room_id"))
-	switch {
-	case conversationID == "" && roomID == "":
-		return "", fmt.Errorf("room_id or conversation_id is required")
-	case conversationID != "" && roomID != "":
-		return "", fmt.Errorf("room_id and conversation_id cannot both be set")
-	case conversationID != "":
-		return conversationID, nil
-	default:
-		return roomID, nil
+	if roomID == "" {
+		return "", fmt.Errorf("room_id is required")
 	}
+	return roomID, nil
+}
+
+func presentBootstrap(state im.Bootstrap) imBootstrapResponse {
+	return imBootstrapResponse{
+		CurrentUserID:      state.CurrentUserID,
+		Users:              state.Users,
+		Rooms:              state.Rooms,
+		InviteDraftUserIDs: state.InviteDraftUserIDs,
+	}
+}
+
+func presentEvent(evt im.Event) imEventResponse {
+	return imEventResponse{
+		Type:    evt.Type,
+		RoomID:  evt.RoomID,
+		Room:    evt.Room,
+		User:    evt.User,
+		Message: evt.Message,
+		Sender:  evt.Sender,
+	}
+}
+
+func (r createMessageRequest) toServiceRequest() (im.CreateMessageRequest, error) {
+	roomID := strings.TrimSpace(r.RoomID)
+	if roomID == "" {
+		return im.CreateMessageRequest{}, fmt.Errorf("room_id is required")
+	}
+
+	return im.CreateMessageRequest{
+		RoomID:   roomID,
+		SenderID: r.SenderID,
+		Content:  r.Content,
+	}, nil
+}
+
+func (r addRoomMembersRequest) toServiceRequest() (im.AddRoomMembersRequest, error) {
+	roomID := strings.TrimSpace(r.RoomID)
+	if roomID == "" {
+		return im.AddRoomMembersRequest{}, fmt.Errorf("room_id is required")
+	}
+
+	return im.AddRoomMembersRequest{
+		RoomID:    roomID,
+		InviterID: r.InviterID,
+		UserIDs:   r.UserIDs,
+		Locale:    r.Locale,
+	}, nil
 }
 
 func (s *HTTPServer) ensureWorkerIMState(created agent.Agent) error {
@@ -659,7 +740,7 @@ func (s *HTTPServer) ensureWorkerIMState(created agent.Agent) error {
 	}
 	s.publishUserEvent(im.EventTypeUserCreated, user)
 	if room != nil {
-		s.publishConversationEvent(im.EventTypeConversationCreated, *room)
+		s.publishRoomEvent(im.EventTypeRoomCreated, *room)
 	}
 	return nil
 }
@@ -675,21 +756,22 @@ func (s *HTTPServer) publishMessageCreated(conversationID, senderID string, mess
 	messageCopy := message
 	senderCopy := sender
 	s.imBus.Publish(im.Event{
-		Type:           im.EventTypeMessageCreated,
-		ConversationID: conversationID,
-		Message:        &messageCopy,
-		Sender:         &senderCopy,
+		Type:    im.EventTypeMessageCreated,
+		RoomID:  conversationID,
+		Message: &messageCopy,
+		Sender:  &senderCopy,
 	})
 }
 
-func (s *HTTPServer) publishConversationEvent(eventType string, conversation im.Conversation) {
+func (s *HTTPServer) publishRoomEvent(eventType string, room im.Room) {
 	if s.imBus == nil {
 		return
 	}
-	conversationCopy := conversation
+	roomCopy := room
 	s.imBus.Publish(im.Event{
-		Type:         eventType,
-		Conversation: &conversationCopy,
+		Type:   eventType,
+		RoomID: room.ID,
+		Room:   &roomCopy,
 	})
 }
 
@@ -708,11 +790,11 @@ func (s *HTTPServer) publishPicoClawEvent(evt im.Event) {
 	if s.picoclaw == nil || evt.Type != im.EventTypeMessageCreated || evt.Message == nil || evt.Sender == nil {
 		return
 	}
-	conversation, ok := s.im.Conversation(evt.ConversationID)
+	room, ok := s.im.Room(evt.RoomID)
 	if !ok {
 		return
 	}
-	s.picoclaw.PublishMessageEvent(conversation, *evt.Sender, *evt.Message)
+	s.picoclaw.PublishMessageEvent(room, *evt.Sender, *evt.Message)
 }
 
 func parsePicoClawBotPath(path string) (botID, action string, ok bool) {

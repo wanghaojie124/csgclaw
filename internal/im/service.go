@@ -32,7 +32,7 @@ type Message struct {
 	Mentions  []string  `json:"mentions"`
 }
 
-type Conversation struct {
+type Room struct {
 	ID           string    `json:"id"`
 	Title        string    `json:"title"`
 	Subtitle     string    `json:"subtitle"`
@@ -41,17 +41,20 @@ type Conversation struct {
 	Messages     []Message `json:"messages"`
 }
 
+type Conversation = Room
+
 type Bootstrap struct {
-	CurrentUserID      string         `json:"current_user_id"`
-	Users              []User         `json:"users"`
-	Conversations      []Conversation `json:"conversations"`
-	InviteDraftUserIDs []string       `json:"invite_draft_user_ids,omitempty"`
+	CurrentUserID      string   `json:"current_user_id"`
+	Users              []User   `json:"users"`
+	Rooms              []Room   `json:"rooms,omitempty"`
+	Conversations      []Room   `json:"conversations,omitempty"`
+	InviteDraftUserIDs []string `json:"invite_draft_user_ids,omitempty"`
 }
 
 type CreateMessageRequest struct {
-	ConversationID string `json:"conversation_id"`
-	SenderID       string `json:"sender_id"`
-	Content        string `json:"content"`
+	RoomID   string `json:"room_id,omitempty"`
+	SenderID string `json:"sender_id"`
+	Content  string `json:"content"`
 }
 
 type DeliverMessageRequest struct {
@@ -61,7 +64,7 @@ type DeliverMessageRequest struct {
 	MessageID string `json:"message_id,omitempty"`
 }
 
-type CreateConversationRequest struct {
+type CreateRoomRequest struct {
 	Title          string   `json:"title"`
 	Description    string   `json:"description"`
 	CreatorID      string   `json:"creator_id"`
@@ -69,12 +72,16 @@ type CreateConversationRequest struct {
 	Locale         string   `json:"locale"`
 }
 
-type AddConversationMembersRequest struct {
-	ConversationID string   `json:"conversation_id"`
-	InviterID      string   `json:"inviter_id"`
-	UserIDs        []string `json:"user_ids"`
-	Locale         string   `json:"locale"`
+type CreateConversationRequest = CreateRoomRequest
+
+type AddRoomMembersRequest struct {
+	RoomID    string   `json:"room_id,omitempty"`
+	InviterID string   `json:"inviter_id"`
+	UserIDs   []string `json:"user_ids"`
+	Locale    string   `json:"locale"`
 }
+
+type AddConversationMembersRequest = AddRoomMembersRequest
 
 type EnsureAgentUserRequest struct {
 	ID     string `json:"id"`
@@ -86,11 +93,10 @@ type EnsureAgentUserRequest struct {
 type EnsureWorkerUserRequest = EnsureAgentUserRequest
 
 type AddAgentToConversationRequest struct {
-	AgentID        string `json:"agent_id"`
-	ConversationID string `json:"conversation_id,omitempty"`
-	RoomID         string `json:"room_id,omitempty"`
-	InviterID      string `json:"inviter_id"`
-	Locale         string `json:"locale"`
+	AgentID   string `json:"agent_id"`
+	RoomID    string `json:"room_id,omitempty"`
+	InviterID string `json:"inviter_id"`
+	Locale    string `json:"locale"`
 }
 
 type Service struct {
@@ -99,7 +105,7 @@ type Service struct {
 	currentUserID string
 	users         map[string]User
 	byHandle      map[string]string
-	conversations map[string]*Conversation
+	rooms         map[string]*Room
 }
 
 var mentionPattern = regexp.MustCompile(`(^|[^\w])@([a-zA-Z0-9._-]+)`)
@@ -122,20 +128,20 @@ func NewServiceFromBootstrap(state Bootstrap) *Service {
 	state = normalizeBootstrap(state)
 
 	users := state.Users
-	conversations := state.Conversations
+	rooms := state.Rooms
 	svc := &Service{
 		currentUserID: state.CurrentUserID,
 		users:         make(map[string]User, len(users)),
 		byHandle:      make(map[string]string, len(users)),
-		conversations: make(map[string]*Conversation, len(conversations)),
+		rooms:         make(map[string]*Room, len(rooms)),
 	}
 	for _, user := range users {
 		svc.users[user.ID] = user
 		svc.byHandle[strings.ToLower(user.Handle)] = user.ID
 	}
-	for i := range conversations {
-		conv := conversations[i]
-		svc.conversations[conv.ID] = &conv
+	for i := range rooms {
+		room := rooms[i]
+		svc.rooms[room.ID] = &room
 	}
 	return svc
 }
@@ -144,7 +150,7 @@ func DefaultBootstrap() Bootstrap {
 	return Bootstrap{
 		CurrentUserID: "u-admin",
 		Users:         nil,
-		Conversations: nil,
+		Rooms:         nil,
 	}
 }
 
@@ -189,7 +195,7 @@ func EnsureBootstrapState(path string) error {
 		return err
 	}
 	state = normalizeBootstrap(state)
-	state.Conversations = ensureAdminManagerRoom(state.Conversations)
+	state.Rooms = ensureAdminManagerRoom(state.Rooms)
 	state.InviteDraftUserIDs = nil
 	return SaveBootstrap(path, state)
 }
@@ -199,11 +205,22 @@ func normalizeBootstrap(state Bootstrap) Bootstrap {
 		state.CurrentUserID = DefaultBootstrap().CurrentUserID
 	}
 	state.Users = ensureUsers(state.Users)
-	state.Conversations = cloneConversations(state.Conversations)
+	state.Rooms = normalizeRooms(state.Rooms, state.Conversations)
 	if !containsUserID(state.Users, state.CurrentUserID) {
 		state.CurrentUserID = defaultCurrentUserID(state.Users)
 	}
 	return state
+}
+
+func normalizeRooms(rooms, conversations []Room) []Room {
+	switch {
+	case len(rooms) > 0:
+		return cloneRooms(rooms)
+	case len(conversations) > 0:
+		return cloneRooms(conversations)
+	default:
+		return nil
+	}
 }
 
 func ensureUsers(users []User) []User {
@@ -263,23 +280,23 @@ func defaultCurrentUserID(users []User) string {
 	return ""
 }
 
-func cloneConversations(conversations []Conversation) []Conversation {
-	cloned := make([]Conversation, 0, len(conversations))
-	for _, conv := range conversations {
-		cloned = append(cloned, cloneConversation(conv))
+func cloneRooms(rooms []Room) []Room {
+	cloned := make([]Room, 0, len(rooms))
+	for _, room := range rooms {
+		cloned = append(cloned, cloneRoom(room))
 	}
 	return cloned
 }
 
-func ensureAdminManagerRoom(conversations []Conversation) []Conversation {
-	for _, conv := range conversations {
-		if containsUserIDInConversation(conv, "u-admin") && containsUserIDInConversation(conv, "u-manager") {
-			return conversations
+func ensureAdminManagerRoom(rooms []Room) []Room {
+	for _, room := range rooms {
+		if containsUserIDInRoom(room, "u-admin") && containsUserIDInRoom(room, "u-manager") {
+			return rooms
 		}
 	}
 
 	now := time.Now().UTC()
-	room := Conversation{
+	room := Room{
 		ID:           fmt.Sprintf("room-%d", now.UnixNano()),
 		Title:        "Admin & Manager",
 		Subtitle:     formatConversationSubtitle(2),
@@ -294,16 +311,20 @@ func ensureAdminManagerRoom(conversations []Conversation) []Conversation {
 			},
 		},
 	}
-	return append(cloneConversations(conversations), room)
+	return append(cloneRooms(rooms), room)
 }
 
-func containsUserIDInConversation(conv Conversation, userID string) bool {
-	for _, participantID := range conv.Participants {
+func containsUserIDInRoom(room Room, userID string) bool {
+	for _, participantID := range room.Participants {
 		if participantID == userID {
 			return true
 		}
 	}
 	return false
+}
+
+func containsUserIDInConversation(conv Conversation, userID string) bool {
+	return containsUserIDInRoom(conv, userID)
 }
 
 func (s *Service) Bootstrap() Bootstrap {
@@ -316,33 +337,33 @@ func (s *Service) Bootstrap() Bootstrap {
 	}
 	slices.SortFunc(users, func(a, b User) int { return strings.Compare(a.Name, b.Name) })
 
-	conversations := make([]Conversation, 0, len(s.conversations))
-	for _, conv := range s.conversations {
-		conversations = append(conversations, s.presentConversationLocked(*conv))
+	rooms := make([]Room, 0, len(s.rooms))
+	for _, room := range s.rooms {
+		rooms = append(rooms, s.presentRoomLocked(*room))
 	}
-	slices.SortFunc(conversations, func(a, b Conversation) int {
-		return latestMessageAt(b).Compare(latestMessageAt(a))
+	slices.SortFunc(rooms, func(a, b Room) int {
+		return latestRoomMessageAt(b).Compare(latestRoomMessageAt(a))
 	})
 
 	return Bootstrap{
 		CurrentUserID: s.currentUserID,
 		Users:         users,
-		Conversations: conversations,
+		Rooms:         rooms,
 	}
 }
 
-func (s *Service) ListRooms() []Conversation {
+func (s *Service) ListRooms() []Room {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	conversations := make([]Conversation, 0, len(s.conversations))
-	for _, conv := range s.conversations {
-		conversations = append(conversations, s.presentConversationLocked(*conv))
+	rooms := make([]Room, 0, len(s.rooms))
+	for _, room := range s.rooms {
+		rooms = append(rooms, s.presentRoomLocked(*room))
 	}
-	slices.SortFunc(conversations, func(a, b Conversation) int {
-		return latestMessageAt(b).Compare(latestMessageAt(a))
+	slices.SortFunc(rooms, func(a, b Room) int {
+		return latestRoomMessageAt(b).Compare(latestRoomMessageAt(a))
 	})
-	return conversations
+	return rooms
 }
 
 func (s *Service) ListUsers() []User {
@@ -357,36 +378,40 @@ func (s *Service) ListUsers() []User {
 	return users
 }
 
-func (s *Service) ListMessages(conversationID string) ([]Message, error) {
-	conversationID = strings.TrimSpace(conversationID)
-	if conversationID == "" {
-		return nil, fmt.Errorf("conversation_id is required")
+func (s *Service) ListMessages(roomID string) ([]Message, error) {
+	roomID = strings.TrimSpace(roomID)
+	if roomID == "" {
+		return nil, fmt.Errorf("room_id is required")
 	}
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	conv, ok := s.conversations[conversationID]
+	room, ok := s.rooms[roomID]
 	if !ok {
-		return nil, fmt.Errorf("conversation not found")
+		return nil, fmt.Errorf("room not found")
 	}
-	return append([]Message(nil), conv.Messages...), nil
+	return append([]Message(nil), room.Messages...), nil
 }
 
-func (s *Service) DeleteConversation(conversationID string) error {
-	conversationID = strings.TrimSpace(conversationID)
-	if conversationID == "" {
-		return fmt.Errorf("conversation_id is required")
+func (s *Service) DeleteRoom(roomID string) error {
+	roomID = strings.TrimSpace(roomID)
+	if roomID == "" {
+		return fmt.Errorf("room_id is required")
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, ok := s.conversations[conversationID]; !ok {
-		return fmt.Errorf("conversation not found")
+	if _, ok := s.rooms[roomID]; !ok {
+		return fmt.Errorf("room not found")
 	}
-	delete(s.conversations, conversationID)
+	delete(s.rooms, roomID)
 	return s.saveLocked()
+}
+
+func (s *Service) DeleteConversation(conversationID string) error {
+	return s.DeleteRoom(conversationID)
 }
 
 func (s *Service) KickUser(userID string) error {
@@ -409,35 +434,35 @@ func (s *Service) KickUser(userID string) error {
 	delete(s.users, userID)
 	delete(s.byHandle, strings.ToLower(user.Handle))
 
-	for id, conv := range s.conversations {
-		participants := make([]string, 0, len(conv.Participants))
-		for _, participantID := range conv.Participants {
+	for id, room := range s.rooms {
+		participants := make([]string, 0, len(room.Participants))
+		for _, participantID := range room.Participants {
 			if participantID != userID {
 				participants = append(participants, participantID)
 			}
 		}
 
-		messages := make([]Message, 0, len(conv.Messages))
-		for _, message := range conv.Messages {
+		messages := make([]Message, 0, len(room.Messages))
+		for _, message := range room.Messages {
 			if message.SenderID != userID {
 				messages = append(messages, message)
 			}
 		}
 
 		if len(participants) < 2 {
-			delete(s.conversations, id)
+			delete(s.rooms, id)
 			continue
 		}
 
-		conv.Participants = participants
-		conv.Messages = messages
-		conv.Subtitle = formatConversationSubtitle(len(participants))
+		room.Participants = participants
+		room.Messages = messages
+		room.Subtitle = formatRoomSubtitle(len(participants))
 	}
 
 	return s.saveLocked()
 }
 
-func (s *Service) EnsureAgentUser(req EnsureAgentUserRequest) (User, *Conversation, error) {
+func (s *Service) EnsureAgentUser(req EnsureAgentUserRequest) (User, *Room, error) {
 	id := strings.TrimSpace(req.ID)
 	name := strings.TrimSpace(req.Name)
 	handle := strings.TrimSpace(req.Handle)
@@ -484,21 +509,22 @@ func (s *Service) EnsureAgentUser(req EnsureAgentUserRequest) (User, *Conversati
 		delete(s.users, id)
 		delete(s.byHandle, strings.ToLower(handle))
 		if roomCreated && room != nil {
-			delete(s.conversations, room.ID)
+			delete(s.rooms, room.ID)
 		}
 		return User{}, nil, err
 	}
 	return user, room, nil
 }
 
-func (s *Service) EnsureWorkerUser(req EnsureWorkerUserRequest) (User, *Conversation, error) {
+func (s *Service) EnsureWorkerUser(req EnsureWorkerUserRequest) (User, *Room, error) {
 	return s.EnsureAgentUser(req)
 }
 
 func (s *Service) CreateMessage(req CreateMessageRequest) (Message, error) {
 	content := strings.TrimSpace(req.Content)
-	if req.ConversationID == "" {
-		return Message{}, fmt.Errorf("conversation_id is required")
+	roomID := strings.TrimSpace(req.RoomID)
+	if roomID == "" {
+		return Message{}, fmt.Errorf("room_id is required")
 	}
 	if req.SenderID == "" {
 		return Message{}, fmt.Errorf("sender_id is required")
@@ -514,13 +540,13 @@ func (s *Service) CreateMessage(req CreateMessageRequest) (Message, error) {
 		return Message{}, fmt.Errorf("sender not found")
 	}
 
-	conv, ok := s.conversations[req.ConversationID]
+	room, ok := s.rooms[roomID]
 	if !ok {
-		return Message{}, fmt.Errorf("conversation not found")
+		return Message{}, fmt.Errorf("room not found")
 	}
 
 	message := s.newMessage("", req.SenderID, content)
-	conv.Messages = append(conv.Messages, message)
+	room.Messages = append(room.Messages, message)
 	if err := s.saveLocked(); err != nil {
 		return Message{}, err
 	}
@@ -547,91 +573,96 @@ func (s *Service) DeliverMessage(req DeliverMessageRequest) (Message, error) {
 	if _, ok := s.users[senderID]; !ok {
 		return Message{}, fmt.Errorf("sender not found")
 	}
-	conv, ok := s.conversations[chatID]
+	room, ok := s.rooms[chatID]
 	if !ok {
-		return Message{}, fmt.Errorf("conversation not found")
+		return Message{}, fmt.Errorf("room not found")
 	}
 
 	message := s.newMessage(req.MessageID, senderID, content)
-	conv.Messages = append(conv.Messages, message)
+	room.Messages = append(room.Messages, message)
 	if err := s.saveLocked(); err != nil {
 		return Message{}, err
 	}
 	return message, nil
 }
 
-func (s *Service) CreateConversation(req CreateConversationRequest) (Conversation, error) {
+func (s *Service) CreateRoom(req CreateRoomRequest) (Room, error) {
 	title := strings.TrimSpace(req.Title)
 	description := strings.TrimSpace(req.Description)
 	if title == "" {
-		return Conversation{}, fmt.Errorf("title is required")
+		return Room{}, fmt.Errorf("title is required")
 	}
 	if req.CreatorID == "" {
-		return Conversation{}, fmt.Errorf("creator_id is required")
+		return Room{}, fmt.Errorf("creator_id is required")
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if _, ok := s.users[req.CreatorID]; !ok {
-		return Conversation{}, fmt.Errorf("creator not found")
+		return Room{}, fmt.Errorf("creator not found")
 	}
 
 	participants, err := s.normalizeParticipants(req.CreatorID, req.ParticipantIDs)
 	if err != nil {
-		return Conversation{}, err
+		return Room{}, err
 	}
 
-	conv := Conversation{
+	room := Room{
 		ID:           fmt.Sprintf("room-%d", time.Now().UnixNano()),
 		Title:        title,
-		Subtitle:     formatConversationSubtitle(len(participants)),
+		Subtitle:     formatRoomSubtitle(len(participants)),
 		Description:  description,
 		Participants: participants,
 		Messages: []Message{
 			{
 				ID:        fmt.Sprintf("msg-%d", time.Now().UnixNano()),
 				SenderID:  req.CreatorID,
-				Content:   s.localizeSystemText(req.Locale, "conversation_created", title, nil),
+				Content:   s.localizeSystemText(req.Locale, "room_created", title, nil),
 				CreatedAt: time.Now().UTC(),
 			},
 		},
 	}
 
-	s.conversations[conv.ID] = &conv
+	s.rooms[room.ID] = &room
 	if err := s.saveLocked(); err != nil {
-		return Conversation{}, err
+		return Room{}, err
 	}
-	return s.presentConversationLocked(conv), nil
+	return s.presentRoomLocked(room), nil
 }
 
-func (s *Service) AddConversationMembers(req AddConversationMembersRequest) (Conversation, error) {
-	if req.ConversationID == "" {
-		return Conversation{}, fmt.Errorf("conversation_id is required")
+func (s *Service) CreateConversation(req CreateConversationRequest) (Conversation, error) {
+	return s.CreateRoom(req)
+}
+
+func (s *Service) AddRoomMembers(req AddRoomMembersRequest) (Room, error) {
+	roomID := strings.TrimSpace(req.RoomID)
+	if roomID == "" {
+		return Room{}, fmt.Errorf("room_id is required")
 	}
 	if req.InviterID == "" {
-		return Conversation{}, fmt.Errorf("inviter_id is required")
+		return Room{}, fmt.Errorf("inviter_id is required")
 	}
 	if len(req.UserIDs) == 0 {
-		return Conversation{}, fmt.Errorf("user_ids is required")
+		return Room{}, fmt.Errorf("user_ids is required")
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	conv, ok := s.conversations[req.ConversationID]
+	room, ok := s.rooms[roomID]
 	if !ok {
-		return Conversation{}, fmt.Errorf("conversation not found")
+		return Room{}, fmt.Errorf("room not found")
 	}
 	if _, ok := s.users[req.InviterID]; !ok {
-		return Conversation{}, fmt.Errorf("inviter not found")
+		return Room{}, fmt.Errorf("inviter not found")
 	}
-	if !slices.Contains(conv.Participants, req.InviterID) {
-		return Conversation{}, fmt.Errorf("inviter is not a conversation member")
+	if !slices.Contains(room.Participants, req.InviterID) {
+		return Room{}, fmt.Errorf("inviter is not a room member")
 	}
 
-	existing := make(map[string]struct{}, len(conv.Participants))
-	for _, id := range conv.Participants {
+	existing := make(map[string]struct{}, len(room.Participants))
+	for _, id := range room.Participants {
 		existing[id] = struct{}{}
 	}
 
@@ -642,64 +673,69 @@ func (s *Service) AddConversationMembers(req AddConversationMembersRequest) (Con
 			continue
 		}
 		if _, ok := s.users[userID]; !ok {
-			return Conversation{}, fmt.Errorf("user not found: %s", userID)
+			return Room{}, fmt.Errorf("user not found: %s", userID)
 		}
 		if _, ok := existing[userID]; ok {
 			continue
 		}
 		existing[userID] = struct{}{}
-		conv.Participants = append(conv.Participants, userID)
+		room.Participants = append(room.Participants, userID)
 		addedIDs = append(addedIDs, userID)
 	}
 	if len(addedIDs) == 0 {
-		return Conversation{}, fmt.Errorf("no new users to invite")
+		return Room{}, fmt.Errorf("no new users to invite")
 	}
 
-	conv.Subtitle = formatConversationSubtitle(len(conv.Participants))
-	conv.Messages = append(conv.Messages, Message{
+	room.Subtitle = formatRoomSubtitle(len(room.Participants))
+	room.Messages = append(room.Messages, Message{
 		ID:        fmt.Sprintf("msg-%d", time.Now().UnixNano()),
 		SenderID:  req.InviterID,
-		Content:   s.localizeSystemText(req.Locale, "members_added", "", addedIDs),
+		Content:   s.localizeSystemText(req.Locale, "room_members_added", "", addedIDs),
 		CreatedAt: time.Now().UTC(),
 		Mentions:  append([]string(nil), addedIDs...),
 	})
 	if err := s.saveLocked(); err != nil {
-		return Conversation{}, err
+		return Room{}, err
 	}
 
-	return s.presentConversationLocked(*conv), nil
+	return s.presentRoomLocked(*room), nil
 }
 
-func (s *Service) AddAgentToConversation(req AddAgentToConversationRequest) (Conversation, error) {
-	conversationID := strings.TrimSpace(req.ConversationID)
+func (s *Service) AddConversationMembers(req AddConversationMembersRequest) (Conversation, error) {
+	return s.AddRoomMembers(req)
+}
+
+func (s *Service) AddAgentToRoom(req AddAgentToConversationRequest) (Room, error) {
 	roomID := strings.TrimSpace(req.RoomID)
-	switch {
-	case conversationID == "" && roomID == "":
-		return Conversation{}, fmt.Errorf("conversation_id or room_id is required")
-	case conversationID != "" && roomID != "":
-		return Conversation{}, fmt.Errorf("conversation_id and room_id cannot both be set")
-	}
-	if conversationID == "" {
-		conversationID = roomID
+	if roomID == "" {
+		return Room{}, fmt.Errorf("room_id is required")
 	}
 
-	return s.AddConversationMembers(AddConversationMembersRequest{
-		ConversationID: conversationID,
-		InviterID:      strings.TrimSpace(req.InviterID),
-		UserIDs:        []string{strings.TrimSpace(req.AgentID)},
-		Locale:         req.Locale,
+	return s.AddRoomMembers(AddRoomMembersRequest{
+		RoomID:    roomID,
+		InviterID: strings.TrimSpace(req.InviterID),
+		UserIDs:   []string{strings.TrimSpace(req.AgentID)},
+		Locale:    req.Locale,
 	})
 }
 
-func (s *Service) Conversation(conversationID string) (Conversation, bool) {
+func (s *Service) AddAgentToConversation(req AddAgentToConversationRequest) (Conversation, error) {
+	return s.AddAgentToRoom(req)
+}
+
+func (s *Service) Room(roomID string) (Room, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	conv, ok := s.conversations[conversationID]
+	room, ok := s.rooms[roomID]
 	if !ok {
-		return Conversation{}, false
+		return Room{}, false
 	}
-	return s.presentConversationLocked(*conv), true
+	return s.presentRoomLocked(*room), true
+}
+
+func (s *Service) Conversation(conversationID string) (Conversation, bool) {
+	return s.Room(conversationID)
 }
 
 func (s *Service) User(userID string) (User, bool) {
@@ -765,17 +801,17 @@ func (s *Service) localizeSystemText(locale, key, title string, userIDs []string
 	switch normalizeLocale(locale) {
 	case "en":
 		switch key {
-		case "conversation_created":
-			return fmt.Sprintf("Created conversation \"%s\". Welcome everyone.", title)
-		case "members_added":
-			return fmt.Sprintf("Added %s to the conversation.", strings.Join(s.formatHandles(userIDs), ", "))
+		case "room_created":
+			return fmt.Sprintf("Created room \"%s\". Welcome everyone.", title)
+		case "room_members_added":
+			return fmt.Sprintf("Added %s to the room.", strings.Join(s.formatHandles(userIDs), ", "))
 		}
 	default:
 		switch key {
-		case "conversation_created":
-			return fmt.Sprintf("已创建会话“%s”，欢迎大家加入。", title)
-		case "members_added":
-			return fmt.Sprintf("已将 %s 添加到会话。", s.formatUserList(userIDs))
+		case "room_created":
+			return fmt.Sprintf("已创建房间“%s”，欢迎大家加入。", title)
+		case "room_members_added":
+			return fmt.Sprintf("已将 %s 添加到房间。", s.formatUserList(userIDs))
 		}
 	}
 	return ""
@@ -799,12 +835,16 @@ func normalizeLocale(locale string) string {
 	return "zh"
 }
 
-func formatConversationSubtitle(count int) string {
+func formatRoomSubtitle(count int) string {
 	return fmt.Sprintf("%d members", count)
 }
 
-func (s *Service) presentConversationLocked(conv Conversation) Conversation {
-	cloned := cloneConversation(conv)
+func formatConversationSubtitle(count int) string {
+	return formatRoomSubtitle(count)
+}
+
+func (s *Service) presentRoomLocked(room Room) Room {
+	cloned := cloneRoom(room)
 	if len(cloned.Participants) != 2 {
 		return cloned
 	}
@@ -819,11 +859,19 @@ func (s *Service) presentConversationLocked(conv Conversation) Conversation {
 	return cloned
 }
 
-func cloneConversation(conv Conversation) Conversation {
-	cloned := conv
-	cloned.Participants = append([]string(nil), conv.Participants...)
-	cloned.Messages = append([]Message(nil), conv.Messages...)
+func (s *Service) presentConversationLocked(conv Conversation) Conversation {
+	return s.presentRoomLocked(conv)
+}
+
+func cloneRoom(room Room) Room {
+	cloned := room
+	cloned.Participants = append([]string(nil), room.Participants...)
+	cloned.Messages = append([]Message(nil), room.Messages...)
 	return cloned
+}
+
+func cloneConversation(conv Conversation) Conversation {
+	return cloneRoom(conv)
 }
 
 func (s *Service) newMessage(messageID, senderID, content string) Message {
@@ -853,37 +901,37 @@ func (s *Service) bootstrapLocked() Bootstrap {
 	}
 	slices.SortFunc(users, func(a, b User) int { return strings.Compare(a.Name, b.Name) })
 
-	conversations := make([]Conversation, 0, len(s.conversations))
-	for _, conv := range s.conversations {
-		conversations = append(conversations, cloneConversation(*conv))
+	rooms := make([]Room, 0, len(s.rooms))
+	for _, room := range s.rooms {
+		rooms = append(rooms, cloneRoom(*room))
 	}
-	slices.SortFunc(conversations, func(a, b Conversation) int {
-		return latestMessageAt(b).Compare(latestMessageAt(a))
+	slices.SortFunc(rooms, func(a, b Room) int {
+		return latestRoomMessageAt(b).Compare(latestRoomMessageAt(a))
 	})
 
 	return Bootstrap{
 		CurrentUserID: s.currentUserID,
 		Users:         users,
-		Conversations: conversations,
+		Rooms:         rooms,
 	}
 }
 
-func (s *Service) ensureAdminAgentRoomLocked(agentID, agentName string) (*Conversation, bool) {
-	for _, conv := range s.conversations {
-		if len(conv.Participants) != 2 {
+func (s *Service) ensureAdminAgentRoomLocked(agentID, agentName string) (*Room, bool) {
+	for _, room := range s.rooms {
+		if len(room.Participants) != 2 {
 			continue
 		}
-		if containsUserIDInConversation(*conv, "u-admin") && containsUserIDInConversation(*conv, agentID) {
-			presented := s.presentConversationLocked(*conv)
+		if containsUserIDInRoom(*room, "u-admin") && containsUserIDInRoom(*room, agentID) {
+			presented := s.presentRoomLocked(*room)
 			return &presented, false
 		}
 	}
 
 	now := time.Now().UTC()
-	room := Conversation{
+	room := Room{
 		ID:           fmt.Sprintf("room-%d", now.UnixNano()),
 		Title:        agentName,
-		Subtitle:     formatConversationSubtitle(2),
+		Subtitle:     formatRoomSubtitle(2),
 		Description:  fmt.Sprintf("Bootstrap room for Admin and %s.", agentName),
 		Participants: []string{"u-admin", agentID},
 		Messages: []Message{
@@ -895,8 +943,8 @@ func (s *Service) ensureAdminAgentRoomLocked(agentID, agentName string) (*Conver
 			},
 		},
 	}
-	s.conversations[room.ID] = &room
-	presented := s.presentConversationLocked(room)
+	s.rooms[room.ID] = &room
+	presented := s.presentRoomLocked(room)
 	return &presented, true
 }
 
@@ -940,11 +988,15 @@ func accentHexForID(id string) string {
 	return palette[sum%len(palette)]
 }
 
-func latestMessageAt(conv Conversation) time.Time {
-	if len(conv.Messages) == 0 {
+func latestRoomMessageAt(room Room) time.Time {
+	if len(room.Messages) == 0 {
 		return time.Time{}
 	}
-	return conv.Messages[len(conv.Messages)-1].CreatedAt
+	return room.Messages[len(room.Messages)-1].CreatedAt
+}
+
+func latestMessageAt(conv Conversation) time.Time {
+	return latestRoomMessageAt(conv)
 }
 
 func seedTime(hour, minute int) time.Time {

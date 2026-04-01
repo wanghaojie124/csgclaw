@@ -84,11 +84,11 @@ const messages = {
       "creator_id is required": "缺少创建者",
       "creator not found": "创建者不存在",
       "user not found": "用户不存在",
-      "conversation_id is required": "缺少会话 ID",
-      "conversation not found": "会话不存在",
+      "room_id is required": "缺少房间 ID",
+      "room not found": "房间不存在",
       "inviter_id is required": "缺少邀请者",
       "inviter not found": "邀请者不存在",
-      "inviter is not a conversation member": "邀请者不在当前会话中",
+      "inviter is not a room member": "邀请者不在当前房间中",
       "user_ids is required": "请选择至少一位成员",
       "no new users to invite": "没有可新增的成员",
     },
@@ -156,11 +156,11 @@ const messages = {
       "creator_id is required": "Creator is required",
       "creator not found": "Creator not found",
       "user not found": "User not found",
-      "conversation_id is required": "Conversation ID is required",
-      "conversation not found": "Conversation not found",
+      "room_id is required": "Room ID is required",
+      "room not found": "Room not found",
       "inviter_id is required": "Inviter is required",
       "inviter not found": "Inviter not found",
-      "inviter is not a conversation member": "Inviter is not a conversation member",
+      "inviter is not a room member": "Inviter is not a room member",
       "user_ids is required": "Select at least one member",
       "no new users to invite": "There are no new users to invite",
     },
@@ -324,11 +324,11 @@ function App() {
     fetch("/api/v1/bootstrap")
       .then((resp) => resp.json())
       .then((payload) => {
-        setData(payload);
+        setData(normalizeIMData(payload));
         setLoadingError("");
         setInviteUserIDs([]);
-        if (payload.conversations.length > 0) {
-          setActiveConversationId(payload.conversations[0].id);
+        if (payload.rooms.length > 0) {
+          setActiveConversationId(payload.rooms[0].id);
         }
       })
       .catch(() => setLoadingError(messages[locale].loadingFailed));
@@ -454,7 +454,7 @@ function App() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        conversation_id: activeConversation.id,
+        room_id: activeConversation.id,
         sender_id: data.current_user_id,
         content: draft,
       }),
@@ -507,7 +507,7 @@ function App() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        conversation_id: activeConversation.id,
+        room_id: activeConversation.id,
         inviter_id: data.current_user_id,
         user_ids: inviteUserIDs,
         locale,
@@ -1009,10 +1009,10 @@ function applyIMEvent(current, event) {
     return upsertUserInData(current, event.user);
   }
   if (event.type === "message.created" && event.message) {
-    return appendMessageToData(current, event.conversation_id, event.message);
+    return appendMessageToData(current, event.room_id, event.message);
   }
-  if ((event.type === "conversation.created" || event.type === "conversation.members_added") && event.conversation) {
-    return upsertConversationInData(current, event.conversation);
+  if ((event.type === "conversation.created" || event.type === "conversation.members_added" || event.type === "room.created" || event.type === "room.members_added") && event.room) {
+    return upsertConversationInData(current, event.room);
   }
   return current;
 }
@@ -1061,6 +1061,14 @@ function upsertUserInData(current, user) {
 
 function sortConversations(conversations) {
   return [...conversations].sort((a, b) => latestAt(b) - latestAt(a));
+}
+
+function normalizeIMData(payload) {
+  if (!payload) {
+    return payload;
+  }
+  const rooms = payload.rooms ?? [];
+  return { ...payload, rooms, conversations: rooms };
 }
 
 function toggleSelection(current, id) {

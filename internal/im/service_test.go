@@ -23,7 +23,7 @@ func TestEnsureWorkerUserCreatesUserAndBootstrapRoom(t *testing.T) {
 	if room == nil {
 		t.Fatal("EnsureWorkerUser() room = nil, want bootstrap room")
 	}
-	if len(room.Participants) != 2 || !containsUserIDInConversation(*room, "u-admin") || !containsUserIDInConversation(*room, "u-alice") {
+	if len(room.Participants) != 2 || !containsUserIDInRoom(*room, "u-admin") || !containsUserIDInRoom(*room, "u-alice") {
 		t.Fatalf("EnsureWorkerUser() room participants = %+v, want admin and worker", room.Participants)
 	}
 }
@@ -49,7 +49,7 @@ func TestEnsureWorkerUserRejectsDuplicateHandle(t *testing.T) {
 	}
 }
 
-func TestAddAgentToConversationSupportsRoomID(t *testing.T) {
+func TestAddAgentToRoomSupportsRoomID(t *testing.T) {
 	svc := NewService()
 
 	_, _, err := svc.EnsureAgentUser(EnsureAgentUserRequest{
@@ -62,25 +62,25 @@ func TestAddAgentToConversationSupportsRoomID(t *testing.T) {
 		t.Fatalf("EnsureAgentUser() error = %v", err)
 	}
 
-	conversation, err := svc.CreateConversation(CreateConversationRequest{
+	room, err := svc.CreateRoom(CreateRoomRequest{
 		Title:          "Ops",
 		CreatorID:      "u-admin",
 		ParticipantIDs: []string{"u-manager"},
 	})
 	if err != nil {
-		t.Fatalf("CreateConversation() error = %v", err)
+		t.Fatalf("CreateRoom() error = %v", err)
 	}
 
-	updated, err := svc.AddAgentToConversation(AddAgentToConversationRequest{
+	updated, err := svc.AddAgentToRoom(AddAgentToConversationRequest{
 		AgentID:   "u-alice",
-		RoomID:    conversation.ID,
+		RoomID:    room.ID,
 		InviterID: "u-admin",
 	})
 	if err != nil {
-		t.Fatalf("AddAgentToConversation() error = %v", err)
+		t.Fatalf("AddAgentToRoom() error = %v", err)
 	}
-	if !containsUserIDInConversation(updated, "u-alice") {
-		t.Fatalf("AddAgentToConversation() participants = %+v, want agent joined", updated.Participants)
+	if !containsUserIDInRoom(updated, "u-alice") {
+		t.Fatalf("AddAgentToRoom() participants = %+v, want agent joined", updated.Participants)
 	}
 }
 
@@ -141,7 +141,7 @@ func TestListRoomsUsersAndMessages(t *testing.T) {
 	}
 }
 
-func TestDeleteConversationRemovesConversation(t *testing.T) {
+func TestDeleteRoomRemovesRoom(t *testing.T) {
 	svc := NewServiceFromBootstrap(Bootstrap{
 		CurrentUserID: "u-admin",
 		Conversations: []Conversation{
@@ -149,11 +149,11 @@ func TestDeleteConversationRemovesConversation(t *testing.T) {
 		},
 	})
 
-	if err := svc.DeleteConversation("room-1"); err != nil {
-		t.Fatalf("DeleteConversation() error = %v", err)
+	if err := svc.DeleteRoom("room-1"); err != nil {
+		t.Fatalf("DeleteRoom() error = %v", err)
 	}
-	if _, ok := svc.Conversation("room-1"); ok {
-		t.Fatal("Conversation() ok = true, want false after delete")
+	if _, ok := svc.Room("room-1"); ok {
+		t.Fatal("Room() ok = true, want false after delete")
 	}
 }
 
@@ -191,19 +191,19 @@ func TestKickUserRemovesUserFromStateConversationsAndMessages(t *testing.T) {
 		t.Fatal("User() ok = true, want false after kick")
 	}
 
-	group, ok := svc.Conversation("room-group")
+	group, ok := svc.Room("room-group")
 	if !ok {
-		t.Fatal("Conversation(room-group) ok = false, want true")
+		t.Fatal("Room(room-group) ok = false, want true")
 	}
-	if containsUserIDInConversation(group, "u-alice") {
+	if containsUserIDInRoom(group, "u-alice") {
 		t.Fatalf("group participants = %+v, want u-alice removed", group.Participants)
 	}
 	if len(group.Messages) != 1 || group.Messages[0].SenderID != "u-bob" {
 		t.Fatalf("group messages = %+v, want only u-bob message", group.Messages)
 	}
 
-	if _, ok := svc.Conversation("room-dm"); ok {
-		t.Fatal("Conversation(room-dm) ok = true, want DM deleted after kick")
+	if _, ok := svc.Room("room-dm"); ok {
+		t.Fatal("Room(room-dm) ok = true, want DM deleted after kick")
 	}
 }
 

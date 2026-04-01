@@ -74,11 +74,11 @@ func (b *PicoClawBridge) Subscribe(botID string) (<-chan PicoClawEvent, func()) 
 	return ch, cancel
 }
 
-func (b *PicoClawBridge) PublishMessageEvent(conversation Conversation, sender User, message Message) {
+func (b *PicoClawBridge) PublishMessageEvent(room Room, sender User, message Message) {
 	b.mu.Lock()
 	targets := make(map[string][]chan PicoClawEvent, len(b.subscribers))
 	for botID, subs := range b.subscribers {
-		if !shouldNotifyBot(conversation, message, botID) {
+		if !shouldNotifyBot(room, message, botID) {
 			continue
 		}
 		for ch := range subs {
@@ -90,8 +90,8 @@ func (b *PicoClawBridge) PublishMessageEvent(conversation Conversation, sender U
 	for botID, subs := range targets {
 		evt := PicoClawEvent{
 			MessageID: message.ID,
-			ChatID:    conversation.ID,
-			ChatType:  chatTypeForConversation(conversation),
+			ChatID:    room.ID,
+			ChatType:  chatTypeForRoom(room),
 			Sender: PicoClawSender{
 				ID:          sender.ID,
 				Username:    sender.Handle,
@@ -118,14 +118,14 @@ func (e PicoClawEvent) MarshalJSONLine() ([]byte, error) {
 	return data, nil
 }
 
-func shouldNotifyBot(conversation Conversation, message Message, botID string) bool {
+func shouldNotifyBot(room Room, message Message, botID string) bool {
 	if message.SenderID == botID {
 		return false
 	}
-	if !containsUserIDInConversation(conversation, botID) {
+	if !containsUserIDInRoom(room, botID) {
 		return false
 	}
-	if chatTypeForConversation(conversation) == "direct" {
+	if chatTypeForRoom(room) == "direct" {
 		return true
 	}
 	for _, mentionedID := range message.Mentions {
@@ -149,9 +149,13 @@ func mentionsForBot(mentions []string, botID string) []string {
 	return result
 }
 
-func chatTypeForConversation(conv Conversation) string {
-	if len(conv.Participants) <= 2 {
+func chatTypeForRoom(room Room) string {
+	if len(room.Participants) <= 2 {
 		return "direct"
 	}
 	return "group"
+}
+
+func chatTypeForConversation(conv Conversation) string {
+	return chatTypeForRoom(conv)
 }

@@ -109,9 +109,9 @@
 - `现状`：[`internal/im/service.go`](/Users/russellluo/Projects/work/opencsg/projects/csgclaw/internal/im/service.go) 内部已经把 Room/DM 抽象成统一 `Conversation`，HTTP 层仍大量暴露 conversation/bootstrap 概念。
 - `影响`：内部统一模型本身没问题，但对外 API 和文档语义需要稳定，否则 CLI 和 WebUI 后续都要反复适配。
 - `推荐增量步骤`：
-  - [ ] A08-1 保留内部 `Conversation`，只先改 HTTP DTO 和 handler 命名。
-  - [ ] A08-2 增加 `ListRooms`/`DeleteRoom`/`ListUsers`/`KickUser` 这类面向资源的 service 方法，内部仍可委托给 conversation/user 存储。
-  - [ ] A08-3 最后再评估是否真的需要在内部文件名和类型名上去掉 `Conversation`。
+  - [x] A08-1 保留内部 `Conversation`，只先改 HTTP DTO 和 handler 命名。
+  - [x] A08-2 增加 `ListRooms`/`DeleteRoom`/`ListUsers`/`KickUser` 这类面向资源的 service 方法，内部仍可委托给 conversation/user 存储。
+  - [x] A08-3 已将 `internal/im` 主模型和主 service 方法切到 `Room`/`CreateRoom`/`AddRoomMembers`/`DeleteRoom`/`Room`，旧 `Conversation*` API 仅保留兼容包装。
 
 ### A09. 当前 IM 缺少目标架构中的读接口
 
@@ -223,7 +223,7 @@
 1. 先做只增不删的接口兼容层：A03、A04-1~A04-3、A06-1、A09。
 2. 再做 CLI 骨架对齐：A01、A02。
 3. 再做 IM/Agent 的缺失资源能力：A04-4~A04-5、A06-2~A06-4、A10。
-4. 等行为稳定后，再做结构重排：A05、A11、A16。
+4. 等行为稳定后，再做结构重排：A05、A08、A11、A16。
 5. 最后处理高成本迁移项：A07、A12、A13、A14、A15、A17。
 
 ## 每一步的验收基线

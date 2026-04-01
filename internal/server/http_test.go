@@ -45,7 +45,7 @@ func TestDeriveAgentHandle(t *testing.T) {
 	}
 }
 
-func TestEnsureWorkerIMStatePublishesBootstrapConversation(t *testing.T) {
+func TestEnsureWorkerIMStatePublishesBootstrapRoom(t *testing.T) {
 	bus := im.NewBus()
 	events, cancel := bus.Subscribe()
 	defer cancel()
@@ -73,17 +73,17 @@ func TestEnsureWorkerIMStatePublishesBootstrapConversation(t *testing.T) {
 	}
 
 	second := mustReceiveEvent(t, events)
-	if second.Type != im.EventTypeConversationCreated {
-		t.Fatalf("second event.Type = %q, want %q", second.Type, im.EventTypeConversationCreated)
+	if second.Type != im.EventTypeRoomCreated {
+		t.Fatalf("second event.Type = %q, want %q", second.Type, im.EventTypeRoomCreated)
 	}
-	if second.Conversation == nil {
-		t.Fatal("second event.Conversation = nil, want bootstrap conversation")
+	if second.Room == nil {
+		t.Fatal("second event.Room = nil, want bootstrap room")
 	}
-	if second.Conversation.Title != "Alice" {
-		t.Fatalf("second event.Conversation.Title = %q, want %q", second.Conversation.Title, "Alice")
+	if second.Room.Title != "Alice" {
+		t.Fatalf("second event.Room.Title = %q, want %q", second.Room.Title, "Alice")
 	}
-	if !containsParticipant(second.Conversation.Participants, "u-admin") || !containsParticipant(second.Conversation.Participants, "u-alice") {
-		t.Fatalf("second event.Conversation.Participants = %+v, want admin and worker", second.Conversation.Participants)
+	if !containsParticipant(second.Room.Participants, "u-admin") || !containsParticipant(second.Room.Participants, "u-alice") {
+		t.Fatalf("second event.Room.Participants = %+v, want admin and worker", second.Room.Participants)
 	}
 }
 
@@ -233,8 +233,8 @@ func TestHandleAgentsCreateUsesWorkerCompatibilityFlow(t *testing.T) {
 
 	first := mustReceiveEvent(t, events)
 	second := mustReceiveEvent(t, events)
-	if first.Type != im.EventTypeUserCreated || second.Type != im.EventTypeConversationCreated {
-		t.Fatalf("events = [%q, %q], want user_created then conversation_created", first.Type, second.Type)
+	if first.Type != im.EventTypeUserCreated || second.Type != im.EventTypeRoomCreated {
+		t.Fatalf("events = [%q, %q], want user_created then room_created", first.Type, second.Type)
 	}
 }
 
@@ -248,12 +248,19 @@ func TestHandleBootstrapAliasReturnsIMBootstrap(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
 	}
-	var got im.Bootstrap
+	var got struct {
+		CurrentUserID string    `json:"current_user_id"`
+		Users         []im.User `json:"users"`
+		Rooms         []im.Room `json:"rooms"`
+	}
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
 	if got.CurrentUserID == "" {
 		t.Fatal("bootstrap current_user_id is empty")
+	}
+	if got.Rooms == nil {
+		t.Fatal("bootstrap rooms is nil, want room-oriented DTO")
 	}
 }
 
@@ -274,7 +281,7 @@ func TestHandleRoomsInviteAliasAddsConversationMembers(t *testing.T) {
 			},
 		}),
 	}
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/rooms/invite", strings.NewReader(`{"conversation_id":"room-1","inviter_id":"u-admin","user_ids":["u-manager"],"locale":"en"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/rooms/invite", strings.NewReader(`{"room_id":"room-1","inviter_id":"u-admin","user_ids":["u-manager"],"locale":"en"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -292,6 +299,18 @@ func TestHandleRoomsInviteAliasAddsConversationMembers(t *testing.T) {
 	}
 	if !containsParticipant(got.Participants, "u-manager") {
 		t.Fatalf("participants = %+v, want u-manager to be invited", got.Participants)
+	}
+}
+
+func TestHandleRoomsInviteRequiresRoomID(t *testing.T) {
+	srv := &HTTPServer{im: im.NewService()}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/rooms/invite", strings.NewReader(`{"inviter_id":"u-admin","user_ids":["u-manager"]}`))
+	rec := httptest.NewRecorder()
+
+	srv.routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
 }
 
@@ -419,7 +438,6 @@ func TestHandleMessagesReturnsConversationMessages(t *testing.T) {
 
 	for _, path := range []string{
 		"/api/v1/messages?room_id=room-1",
-		"/api/v1/messages?conversation_id=room-1",
 	} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		rec := httptest.NewRecorder()
@@ -443,7 +461,6 @@ func TestHandleMessagesRejectsInvalidQuery(t *testing.T) {
 
 	for _, path := range []string{
 		"/api/v1/messages",
-		"/api/v1/messages?room_id=room-1&conversation_id=room-1",
 	} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		rec := httptest.NewRecorder()
@@ -473,7 +490,7 @@ func TestHandleMessagesPostCreatesMessage(t *testing.T) {
 		}),
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/messages", strings.NewReader(`{"conversation_id":"room-1","sender_id":"u-admin","content":"hello @manager"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/messages", strings.NewReader(`{"room_id":"room-1","sender_id":"u-admin","content":"hello @manager"}`))
 	rec := httptest.NewRecorder()
 	srv.routes().ServeHTTP(rec, req)
 
@@ -493,7 +510,59 @@ func TestHandleMessagesPostCreatesMessage(t *testing.T) {
 	}
 }
 
-func TestHandleRoomsPostCreatesConversation(t *testing.T) {
+func TestHandleMessagesPostRequiresRoomID(t *testing.T) {
+	srv := &HTTPServer{im: im.NewService()}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/messages", strings.NewReader(`{"sender_id":"u-admin","content":"hello"}`))
+	rec := httptest.NewRecorder()
+
+	srv.routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestHandleIMEventsExposeRoomIDOnly(t *testing.T) {
+	bus := im.NewBus()
+	srv := &HTTPServer{imBus: bus}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/im/events", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() {
+		srv.routes().ServeHTTP(rec, req)
+		close(done)
+	}()
+
+	time.Sleep(20 * time.Millisecond)
+	bus.Publish(im.Event{
+		Type:   im.EventTypeMessageCreated,
+		RoomID: "room-1",
+		Message: &im.Message{
+			ID:       "msg-1",
+			SenderID: "u-admin",
+			Content:  "hello",
+		},
+		Sender: &im.User{ID: "u-admin", Name: "Admin", Handle: "admin"},
+	})
+	time.Sleep(20 * time.Millisecond)
+	cancel()
+	<-done
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `"room_id":"room-1"`) {
+		t.Fatalf("body = %q, want room_id", body)
+	}
+	if strings.Contains(body, `"conversation_id"`) {
+		t.Fatalf("body = %q, want no conversation_id compatibility field", body)
+	}
+}
+
+func TestHandleRoomsPostCreatesRoom(t *testing.T) {
 	srv := &HTTPServer{
 		im: im.NewServiceFromBootstrap(im.Bootstrap{
 			CurrentUserID: "u-admin",
@@ -554,8 +623,8 @@ func TestHandleUsersDeleteKicksUser(t *testing.T) {
 	if _, ok := srv.im.User("u-alice"); ok {
 		t.Fatal("User() ok = true, want false after delete")
 	}
-	if _, ok := srv.im.Conversation("room-1"); ok {
-		t.Fatal("Conversation() ok = true, want false for DM after kicked user")
+	if _, ok := srv.im.Room("room-1"); ok {
+		t.Fatal("Room() ok = true, want false for DM after kicked user")
 	}
 }
 
@@ -571,7 +640,7 @@ func TestHandleUsersDeleteCurrentUserReturnsConflict(t *testing.T) {
 	}
 }
 
-func TestHandleRoomsDeleteRemovesConversation(t *testing.T) {
+func TestHandleRoomsDeleteRemovesRoom(t *testing.T) {
 	srv := &HTTPServer{
 		im: im.NewServiceFromBootstrap(im.Bootstrap{
 			CurrentUserID: "u-admin",
@@ -588,8 +657,8 @@ func TestHandleRoomsDeleteRemovesConversation(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
 	}
-	if _, ok := srv.im.Conversation("room-1"); ok {
-		t.Fatal("Conversation() ok = true, want false after delete")
+	if _, ok := srv.im.Room("room-1"); ok {
+		t.Fatal("Room() ok = true, want false after delete")
 	}
 }
 

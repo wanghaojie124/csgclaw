@@ -4,18 +4,20 @@ import "sync"
 
 const (
 	EventTypeMessageCreated           = "message.created"
+	EventTypeRoomCreated              = "room.created"
+	EventTypeRoomMembersAdded         = "room.members_added"
 	EventTypeConversationCreated      = "conversation.created"
 	EventTypeConversationMembersAdded = "conversation.members_added"
 	EventTypeUserCreated              = "user.created"
 )
 
 type Event struct {
-	Type           string        `json:"type"`
-	ConversationID string        `json:"conversation_id,omitempty"`
-	Conversation   *Conversation `json:"conversation,omitempty"`
-	User           *User         `json:"user,omitempty"`
-	Message        *Message      `json:"message,omitempty"`
-	Sender         *User         `json:"sender,omitempty"`
+	Type    string   `json:"type"`
+	RoomID  string   `json:"room_id,omitempty"`
+	Room    *Room    `json:"room,omitempty"`
+	User    *User    `json:"user,omitempty"`
+	Message *Message `json:"message,omitempty"`
+	Sender  *User    `json:"sender,omitempty"`
 }
 
 type Bus struct {

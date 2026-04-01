@@ -93,6 +93,7 @@ ok
 ### `GET /api/v1/im/bootstrap`
 
 获取 IM 初始化数据，供 WebUI 首次加载使用。
+响应会同时返回 `rooms` 和兼容字段 `conversations`；新增调用方应优先读取 `rooms`。
 
 响应示例：
 
@@ -110,6 +111,7 @@ ok
       "accent_hex": "#dc2626"
     }
   ],
+  "rooms": [],
   "conversations": []
 }
 ```
@@ -123,23 +125,29 @@ ok
 ```text
 : connected
 
-data: {"type":"message.created","conversation_id":"room-1","message":{"id":"msg-1","sender_id":"u-admin","content":"hello","created_at":"2026-03-28T12:00:00Z","mentions":[]},"sender":{"id":"u-admin","name":"Admin","handle":"admin","role":"Admin","avatar":"AD","is_online":true,"accent_hex":"#dc2626"}}
+data: {"type":"message.created","room_id":"room-1","conversation_id":"room-1","message":{"id":"msg-1","sender_id":"u-admin","content":"hello","created_at":"2026-03-28T12:00:00Z","mentions":[]},"sender":{"id":"u-admin","name":"Admin","handle":"admin","role":"Admin","avatar":"AD","is_online":true,"accent_hex":"#dc2626"}}
 ```
 
 当前事件类型：
 
 - `message.created`
-- `conversation.created`
-- `conversation.members_added`
+- `room.created`
+- `room.members_added`
+
+兼容说明：
+
+- SSE 事件仍会同时携带 `conversation_id` / `conversation` 兼容字段
+- WebUI 和新调用方应优先使用 `room_id` / `room`
 
 ### `POST /api/v1/im/messages`
 
-在会话中发送消息。
+在 room 中发送消息。
 
 请求体：
 
 ```json
 {
+  "room_id": "room-1",
   "conversation_id": "room-1",
   "sender_id": "u-admin",
   "content": "hello @alice"
@@ -162,12 +170,13 @@ data: {"type":"message.created","conversation_id":"room-1","message":{"id":"msg-
 
 说明：
 
-- `conversation_id`、`sender_id`、`content` 必填
+- `room_id` 或 `conversation_id` 二选一；新增调用方应优先传 `room_id`
+- `sender_id`、`content` 必填
 - `content` 中的 `@handle` 会解析为 `mentions`
 
 ### `POST /api/v1/im/conversations`
 
-创建新会话。
+创建新 room。
 
 请求体：
 
@@ -194,7 +203,7 @@ data: {"type":"message.created","conversation_id":"room-1","message":{"id":"msg-
     {
       "id": "msg-1743139200000000002",
       "sender_id": "u-admin",
-      "content": "已创建会话 Frontend Sync",
+      "content": "已创建房间“Frontend Sync”，欢迎大家加入。",
       "created_at": "2026-03-28T12:00:00Z"
     }
   ]
@@ -209,12 +218,13 @@ data: {"type":"message.created","conversation_id":"room-1","message":{"id":"msg-
 
 ### `POST /api/v1/im/conversations/members`
 
-向会话中添加成员。
+向 room 中添加成员。
 
 请求体：
 
 ```json
 {
+  "room_id": "room-1",
   "conversation_id": "room-1",
   "inviter_id": "u-admin",
   "user_ids": ["u-alice", "u-bob"],
@@ -222,12 +232,13 @@ data: {"type":"message.created","conversation_id":"room-1","message":{"id":"msg-
 }
 ```
 
-响应：`200 OK`，返回更新后的会话对象。
+响应：`200 OK`，返回更新后的 room 对象。
 
 说明：
 
-- `conversation_id`、`inviter_id`、`user_ids` 必填
-- `inviter_id` 必须已经在会话内
+- `room_id` 或 `conversation_id` 二选一；新增调用方应优先传 `room_id`
+- `inviter_id`、`user_ids` 必填
+- `inviter_id` 必须已经在 room 内
 - 若没有任何新成员被加入，会返回 `400 Bad Request`
 
 ### `GET /api/v1/rooms`
