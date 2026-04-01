@@ -33,6 +33,34 @@ func TestDefaultRuntimeHomeUsesFixedBoxliteHome(t *testing.T) {
 	}
 }
 
+func TestDefaultAgentsPathUsesDomainSubdirectory(t *testing.T) {
+	path, err := DefaultAgentsPath()
+	if err != nil {
+		t.Fatalf("DefaultAgentsPath() error = %v", err)
+	}
+
+	if got, want := filepath.Base(path), StateFileName; got != want {
+		t.Fatalf("filepath.Base(DefaultAgentsPath()) = %q, want %q", got, want)
+	}
+	if got, want := filepath.Base(filepath.Dir(path)), AgentsDirName; got != want {
+		t.Fatalf("filepath.Base(filepath.Dir(DefaultAgentsPath())) = %q, want %q", got, want)
+	}
+}
+
+func TestDefaultIMStatePathUsesDomainSubdirectory(t *testing.T) {
+	path, err := DefaultIMStatePath()
+	if err != nil {
+		t.Fatalf("DefaultIMStatePath() error = %v", err)
+	}
+
+	if got, want := filepath.Base(path), StateFileName; got != want {
+		t.Fatalf("filepath.Base(DefaultIMStatePath()) = %q, want %q", got, want)
+	}
+	if got, want := filepath.Base(filepath.Dir(path)), IMDirName; got != want {
+		t.Fatalf("filepath.Base(filepath.Dir(DefaultIMStatePath())) = %q, want %q", got, want)
+	}
+}
+
 func TestLoadAppliesDefaultManagerImage(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")

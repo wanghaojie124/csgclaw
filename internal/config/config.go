@@ -39,8 +39,9 @@ const (
 	AppDirName         = ".csgclaw"
 	RuntimeHomeDirName = "boxlite"
 	ConfigFileName     = "config.toml"
-	AgentsFileName     = "agents.json"
-	IMStateFileName    = "im.json"
+	StateFileName      = "state.json"
+	AgentsDirName      = "agents"
+	IMDirName          = "im"
 
 	DefaultListenAddr          = "0.0.0.0:18080"
 	DefaultAPIBaseURL          = "http://127.0.0.1:18080"
@@ -67,20 +68,36 @@ func DefaultPath() (string, error) {
 	return filepath.Join(dir, ConfigFileName), nil
 }
 
-func DefaultAgentsPath() (string, error) {
+func DefaultDomainDir(name string) (string, error) {
 	dir, err := DefaultDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, AgentsFileName), nil
+	return filepath.Join(dir, name), nil
+}
+
+func DefaultAgentsDir() (string, error) {
+	return DefaultDomainDir(AgentsDirName)
+}
+
+func DefaultIMDir() (string, error) {
+	return DefaultDomainDir(IMDirName)
+}
+
+func DefaultAgentsPath() (string, error) {
+	dir, err := DefaultAgentsDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, StateFileName), nil
 }
 
 func DefaultIMStatePath() (string, error) {
-	dir, err := DefaultDir()
+	dir, err := DefaultIMDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, IMStateFileName), nil
+	return filepath.Join(dir, StateFileName), nil
 }
 
 func DefaultRuntimeHome() (string, error) {
