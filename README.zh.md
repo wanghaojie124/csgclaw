@@ -30,10 +30,10 @@ curl -fsSL https://raw.githubusercontent.com/OpenCSGs/csgclaw/main/scripts/insta
 
 ```bash
 csgclaw onboard --base-url <url> --api-key <key> --model-id <model>
-csgclaw start
+csgclaw serve
 ```
 
-执行 `csgclaw start` 后，CLI 会打印 IM 打开地址，例如：
+执行 `csgclaw serve` 后，CLI 会打印 IM 打开地址，例如：
 
 ```text
 CSGClaw IM is available at: http://127.0.0.1:18080/

@@ -30,10 +30,10 @@ After install:
 
 ```bash
 csgclaw onboard --base-url <url> --api-key <key> --model-id <model>
-csgclaw start
+csgclaw serve
 ```
 
-After `csgclaw start`, the CLI will print the IM URL, for example:
+After `csgclaw serve`, the CLI will print the IM URL, for example:
 
 ```text
 CSGClaw IM is available at: http://127.0.0.1:18080/

@@ -34,10 +34,10 @@
 - `现状`：[`cmd/csgclaw/main.go`](/Users/russellluo/Projects/work/opencsg/projects/csgclaw/cmd/csgclaw/main.go) 里只有 `onboard`、`start`、`_serve`；没有资源型子命令，也没有独立 CLI 包。
 - `影响`：CLI 和服务端生命周期耦合，后续很难平滑过渡到“远程可调用”的命令模型。
 - `推荐增量步骤`：
-  - [ ] A01-1 新增 `serve` 命令，内部先复用当前 `start` 逻辑，保留 `start` 作为兼容别名。
-  - [ ] A01-2 新增 `stop` 命令，先基于当前后台进程管理方式落地，哪怕暂时仍沿用现有状态目录。
-  - [ ] A01-3 引入 `cli/` 目录并抽出 root/serve/stop 的命令注册，`main.go` 只保留启动装配。
-  - [ ] A01-4 为后续资源型命令准备统一 HTTP client 和全局 flag 骨架。
+  - [x] A01-1 新增 `serve` 命令，内部先复用当前 `start` 逻辑，保留 `start` 作为兼容别名。
+  - [x] A01-2 新增 `stop` 命令，先基于当前后台进程管理方式落地，哪怕暂时仍沿用现有状态目录。
+  - [x] A01-3 引入 `cli/` 目录并抽出 root/serve/stop 的命令注册，`main.go` 只保留启动装配。
+  - [x] A01-4 为后续资源型命令准备统一 HTTP client 和全局 flag 骨架。
 
 ### A02. CLI 还不是“纯 HTTP 客户端”
 
@@ -45,9 +45,9 @@
 - `现状`：当前 CLI 没有资源型命令；入口本身直接装配 `agent.Service`、`im.Service` 并启动 HTTP server。
 - `影响`：一旦补 `agent/room/user/message` 命令，如果继续直接调内部服务，会和目标架构背离得更远。
 - `推荐增量步骤`：
-  - [ ] A02-1 在 `cli/` 层先定义最小 HTTP client 接口，即使最开始只服务 `agent status` 或 `room list` 这类只读命令。
-  - [ ] A02-2 第一个资源命令只走 HTTP，不允许偷接内部 package。
-  - [ ] A02-3 给 CLI 增加 endpoint/token/output/config 四个全局入口，先允许部分 flag 未使用，但参数形态先稳定下来。
+  - [x] A02-1 在 `cli/` 层先定义最小 HTTP client 接口，即使最开始只服务 `agent status` 或 `room list` 这类只读命令。
+  - [x] A02-2 第一个资源命令只走 HTTP，不允许偷接内部 package。
+  - [x] A02-3 给 CLI 增加 endpoint/token/output/config 四个全局入口，先允许部分 flag 未使用，但参数形态先稳定下来。
 
 ### A03. HTTP 健康检查路径不一致
 
