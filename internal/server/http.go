@@ -88,6 +88,9 @@ func (s *HTTPServer) routes() http.Handler {
 	mux.HandleFunc("/healthz", s.handleHealthz)
 	mux.HandleFunc("/api/v1/agents", s.handleAgents)
 	mux.HandleFunc("/api/v1/agents/", s.handleAgentByID)
+	mux.HandleFunc("/api/v1/rooms", s.handleRooms)
+	mux.HandleFunc("/api/v1/users", s.handleUsers)
+	mux.HandleFunc("/api/v1/messages", s.handleMessages)
 	mux.HandleFunc("/api/v1/workers", s.handleWorkers)
 	mux.HandleFunc("/api/v1/im/agents/join", s.handleIMAgentJoin)
 	mux.HandleFunc("/api/v1/im/bootstrap", s.handleIMBootstrap)
@@ -249,6 +252,58 @@ func (s *HTTPServer) handleIMBootstrap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, s.im.Bootstrap())
+}
+
+func (s *HTTPServer) handleRooms(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.im == nil {
+		http.Error(w, "im service is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.im.ListRooms())
+}
+
+func (s *HTTPServer) handleUsers(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.im == nil {
+		http.Error(w, "im service is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.im.ListUsers())
+}
+
+func (s *HTTPServer) handleMessages(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.im == nil {
+		http.Error(w, "im service is not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	conversationID, err := conversationIDFromQuery(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	messages, err := s.im.ListMessages(conversationID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, messages)
 }
 
 func (s *HTTPServer) handleIMMessages(w http.ResponseWriter, r *http.Request) {
@@ -494,6 +549,21 @@ func sanitizeHandle(input string) (string, bool) {
 		return "", false
 	}
 	return b.String(), true
+}
+
+func conversationIDFromQuery(r *http.Request) (string, error) {
+	conversationID := strings.TrimSpace(r.URL.Query().Get("conversation_id"))
+	roomID := strings.TrimSpace(r.URL.Query().Get("room_id"))
+	switch {
+	case conversationID == "" && roomID == "":
+		return "", fmt.Errorf("room_id or conversation_id is required")
+	case conversationID != "" && roomID != "":
+		return "", fmt.Errorf("room_id and conversation_id cannot both be set")
+	case conversationID != "":
+		return conversationID, nil
+	default:
+		return roomID, nil
+	}
 }
 
 func (s *HTTPServer) ensureWorkerIMState(created agent.Agent) error {

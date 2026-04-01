@@ -331,6 +331,48 @@ func (s *Service) Bootstrap() Bootstrap {
 	}
 }
 
+func (s *Service) ListRooms() []Conversation {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	conversations := make([]Conversation, 0, len(s.conversations))
+	for _, conv := range s.conversations {
+		conversations = append(conversations, s.presentConversationLocked(*conv))
+	}
+	slices.SortFunc(conversations, func(a, b Conversation) int {
+		return latestMessageAt(b).Compare(latestMessageAt(a))
+	})
+	return conversations
+}
+
+func (s *Service) ListUsers() []User {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	users := make([]User, 0, len(s.users))
+	for _, user := range s.users {
+		users = append(users, user)
+	}
+	slices.SortFunc(users, func(a, b User) int { return strings.Compare(a.Name, b.Name) })
+	return users
+}
+
+func (s *Service) ListMessages(conversationID string) ([]Message, error) {
+	conversationID = strings.TrimSpace(conversationID)
+	if conversationID == "" {
+		return nil, fmt.Errorf("conversation_id is required")
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	conv, ok := s.conversations[conversationID]
+	if !ok {
+		return nil, fmt.Errorf("conversation not found")
+	}
+	return append([]Message(nil), conv.Messages...), nil
+}
+
 func (s *Service) EnsureAgentUser(req EnsureAgentUserRequest) (User, *Conversation, error) {
 	id := strings.TrimSpace(req.ID)
 	name := strings.TrimSpace(req.Name)

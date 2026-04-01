@@ -274,6 +274,130 @@ func TestHandleWorkersPostRemainsCreateAlias(t *testing.T) {
 	}
 }
 
+func TestHandleRoomsReturnsConversationList(t *testing.T) {
+	srv := &HTTPServer{
+		im: im.NewServiceFromBootstrap(im.Bootstrap{
+			CurrentUserID: "u-admin",
+			Users: []im.User{
+				{ID: "u-alice", Name: "Alice", Handle: "alice"},
+			},
+			Conversations: []im.Conversation{
+				{
+					ID:           "room-1",
+					Title:        "Room One",
+					Participants: []string{"u-admin", "u-alice"},
+					Messages: []im.Message{{
+						ID:        "msg-1",
+						SenderID:  "u-admin",
+						Content:   "hello",
+						CreatedAt: time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC),
+					}},
+				},
+			},
+		}),
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/rooms", nil)
+	rec := httptest.NewRecorder()
+	srv.routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var got []im.Conversation
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "room-1" {
+		t.Fatalf("rooms = %+v, want room-1", got)
+	}
+}
+
+func TestHandleUsersReturnsUserList(t *testing.T) {
+	srv := &HTTPServer{
+		im: im.NewServiceFromBootstrap(im.Bootstrap{
+			CurrentUserID: "u-admin",
+			Users: []im.User{
+				{ID: "u-zed", Name: "Zed", Handle: "zed"},
+				{ID: "u-alice", Name: "Alice", Handle: "alice"},
+			},
+		}),
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
+	rec := httptest.NewRecorder()
+	srv.routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var got []im.User
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(got) < 2 || got[0].Name != "Admin" || got[1].Name != "Alice" {
+		t.Fatalf("users = %+v, want sorted users starting with Admin/Alice", got)
+	}
+}
+
+func TestHandleMessagesReturnsConversationMessages(t *testing.T) {
+	srv := &HTTPServer{
+		im: im.NewServiceFromBootstrap(im.Bootstrap{
+			CurrentUserID: "u-admin",
+			Conversations: []im.Conversation{
+				{
+					ID:           "room-1",
+					Title:        "Room One",
+					Participants: []string{"u-admin", "u-manager"},
+					Messages: []im.Message{{
+						ID:        "msg-1",
+						SenderID:  "u-admin",
+						Content:   "hello",
+						CreatedAt: time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC),
+					}},
+				},
+			},
+		}),
+	}
+
+	for _, path := range []string{
+		"/api/v1/messages?room_id=room-1",
+		"/api/v1/messages?conversation_id=room-1",
+	} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		srv.routes().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("path %s status = %d, want %d; body=%s", path, rec.Code, http.StatusOK, rec.Body.String())
+		}
+		var got []im.Message
+		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+			t.Fatalf("path %s decode response: %v", path, err)
+		}
+		if len(got) != 1 || got[0].ID != "msg-1" {
+			t.Fatalf("path %s messages = %+v, want msg-1", path, got)
+		}
+	}
+}
+
+func TestHandleMessagesRejectsInvalidQuery(t *testing.T) {
+	srv := &HTTPServer{im: im.NewService()}
+
+	for _, path := range []string{
+		"/api/v1/messages",
+		"/api/v1/messages?room_id=room-1&conversation_id=room-1",
+	} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		srv.routes().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("path %s status = %d, want %d", path, rec.Code, http.StatusBadRequest)
+		}
+	}
+}
+
 func mustNewService(t *testing.T) *agent.Service {
 	t.Helper()
 
