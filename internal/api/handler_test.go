@@ -326,6 +326,60 @@ func TestHandleRoomsInviteAliasAddsConversationMembers(t *testing.T) {
 	}
 }
 
+func TestHandleIMAgentJoinReturnsCompactSuccessPayload(t *testing.T) {
+	srv := &Handler{
+		svc: mustNewSeededService(t, []agent.Agent{
+			{ID: "u-alice", Name: "Alice", Role: agent.RoleWorker, CreatedAt: time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)},
+		}),
+		im: im.NewServiceFromBootstrap(im.Bootstrap{
+			CurrentUserID: "u-admin",
+			Users: []im.User{
+				{ID: "u-admin", Name: "Admin", Handle: "admin"},
+				{ID: "u-alice", Name: "Alice", Handle: "alice"},
+			},
+			Conversations: []im.Conversation{
+				{
+					ID:           "room-1",
+					Title:        "Room One",
+					Participants: []string{"u-admin"},
+					Messages:     []im.Message{{ID: "msg-1", SenderID: "u-admin", Content: "hello"}},
+				},
+			},
+		}),
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/im/agents/join", strings.NewReader(`{"agent_id":"u-alice","room_id":"room-1","locale":"en"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), `"messages"`) {
+		t.Fatalf("body = %s, want compact success payload without messages", rec.Body.String())
+	}
+
+	var got struct {
+		Message string `json:"message"`
+		RoomID  string `json:"room_id"`
+		AgentID string `json:"agent_id"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.Message != "agent joined successfully" {
+		t.Fatalf("message = %q, want success message", got.Message)
+	}
+	if got.RoomID != "room-1" || got.AgentID != "u-alice" {
+		t.Fatalf("response = %+v, want room-1/u-alice", got)
+	}
+	if room, ok := srv.im.Room("room-1"); !ok || !containsParticipant(room.Participants, "u-alice") {
+		t.Fatalf("room participants = %+v, want agent joined", room.Participants)
+	}
+}
+
 func TestHandleRoomsInviteRequiresRoomID(t *testing.T) {
 	srv := &Handler{im: im.NewService()}
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/rooms/invite", strings.NewReader(`{"inviter_id":"u-admin","user_ids":["u-manager"]}`))

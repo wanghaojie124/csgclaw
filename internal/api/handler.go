@@ -35,6 +35,12 @@ type imEventResponse struct {
 	Sender  *im.User    `json:"sender,omitempty"`
 }
 
+type imAgentJoinResponse struct {
+	Message string `json:"message"`
+	RoomID  string `json:"room_id,omitempty"`
+	AgentID string `json:"agent_id,omitempty"`
+}
+
 type createMessageRequest struct {
 	RoomID   string `json:"room_id"`
 	SenderID string `json:"sender_id"`
@@ -195,7 +201,11 @@ func (h *Handler) handleIMAgentJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.publishRoomEvent(im.EventTypeRoomMembersAdded, room)
-	writeJSON(w, http.StatusOK, room)
+	writeJSON(w, http.StatusOK, imAgentJoinResponse{
+		Message: "agent joined successfully",
+		RoomID:  room.ID,
+		AgentID: joinedAgent.ID,
+	})
 }
 
 func (h *Handler) handleIMBootstrap(w http.ResponseWriter, r *http.Request) {
