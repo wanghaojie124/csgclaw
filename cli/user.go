@@ -10,7 +10,18 @@ import (
 
 func (a *App) runUser(ctx context.Context, args []string, globals GlobalOptions) error {
 	if len(args) == 0 {
-		return fmt.Errorf("user subcommand is required")
+		a.usageCommandGroup("user", "Manage users.", "csgclaw user <subcommand> [flags]", []string{
+			"list               List users",
+			"kick <id>          Remove a user",
+		})
+		return flag.ErrHelp
+	}
+	if isHelpArg(args[0]) {
+		a.usageCommandGroup("user", "Manage users.", "csgclaw user <subcommand> [flags]", []string{
+			"list               List users",
+			"kick <id>          Remove a user",
+		})
+		return flag.ErrHelp
 	}
 
 	switch args[0] {
@@ -19,13 +30,16 @@ func (a *App) runUser(ctx context.Context, args []string, globals GlobalOptions)
 	case "kick":
 		return a.runUserKick(ctx, args[1:], globals)
 	default:
+		a.usageCommandGroup("user", "Manage users.", "csgclaw user <subcommand> [flags]", []string{
+			"list               List users",
+			"kick <id>          Remove a user",
+		})
 		return fmt.Errorf("unknown user subcommand %q", args[0])
 	}
 }
 
 func (a *App) runUserList(ctx context.Context, args []string, globals GlobalOptions) error {
-	fs := flag.NewFlagSet("user list", flag.ContinueOnError)
-	fs.SetOutput(a.stderr)
+	fs := a.newCommandFlagSet("user list", "csgclaw user list [flags]", "List users.")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -42,8 +56,7 @@ func (a *App) runUserList(ctx context.Context, args []string, globals GlobalOpti
 }
 
 func (a *App) runUserKick(ctx context.Context, args []string, globals GlobalOptions) error {
-	fs := flag.NewFlagSet("user kick", flag.ContinueOnError)
-	fs.SetOutput(a.stderr)
+	fs := a.newCommandFlagSet("user kick", "csgclaw user kick <id> [flags]", "Remove a user.")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}

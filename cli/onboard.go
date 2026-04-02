@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"flag"
 	"fmt"
 
 	"csgclaw/internal/agent"
@@ -11,9 +10,7 @@ import (
 )
 
 func (a *App) runOnboard(args []string, globals GlobalOptions) error {
-	fs := flag.NewFlagSet("onboard", flag.ContinueOnError)
-	fs.SetOutput(a.stderr)
-
+	fs := a.newCommandFlagSet("onboard", "csgclaw onboard [flags]", "Initialize local config and bootstrap state.")
 	baseURL := fs.String("base-url", config.DefaultLLMBaseURL, "LLM provider base URL")
 	apiKey := fs.String("api-key", config.DefaultLLMAPIKey, "LLM provider API key")
 	modelID := fs.String("model-id", config.DefaultLLMModelID, "LLM model identifier")

@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -22,9 +21,7 @@ import (
 )
 
 func (a *App) runServe(ctx context.Context, args []string, globals GlobalOptions) error {
-	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	fs.SetOutput(a.stderr)
-
+	fs := a.newCommandFlagSet("serve", "csgclaw serve [-d|--daemon] [flags]", "Start the local HTTP server.")
 	daemon := fs.Bool("daemon", false, "run server in background")
 	fs.BoolVar(daemon, "d", false, "run server in background")
 
@@ -57,9 +54,7 @@ func (a *App) runServe(ctx context.Context, args []string, globals GlobalOptions
 }
 
 func (a *App) runInternalServe(ctx context.Context, args []string, globals GlobalOptions) error {
-	fs := flag.NewFlagSet("_serve", flag.ContinueOnError)
-	fs.SetOutput(a.stderr)
-
+	fs := a.newCommandFlagSet("_serve", "csgclaw _serve [flags]", "Internal server entrypoint.")
 	pidPath := fs.String("pid", "", "pid file path")
 	configPathFlag := fs.String("config", globals.Config, "config file path")
 	if err := fs.Parse(args); err != nil {
@@ -171,9 +166,7 @@ func (a *App) serveBackground(cfg config.Config, globals GlobalOptions, logPath,
 }
 
 func (a *App) runStop(args []string, _ GlobalOptions) error {
-	fs := flag.NewFlagSet("stop", flag.ContinueOnError)
-	fs.SetOutput(a.stderr)
-
+	fs := a.newCommandFlagSet("stop", "csgclaw stop [flags]", "Stop the local HTTP server.")
 	defaultPIDPath, err := defaultServerPIDPath()
 	if err != nil {
 		return err

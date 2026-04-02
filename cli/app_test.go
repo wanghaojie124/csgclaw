@@ -312,7 +312,7 @@ func TestExecuteUserKickUsesHTTPClient(t *testing.T) {
 	}
 }
 
-func TestUsageIncludesAgentRoomUserTrees(t *testing.T) {
+func TestUsageIncludesTopLevelCommandIndex(t *testing.T) {
 	var stderr bytes.Buffer
 	app := &App{
 		stdout:     &bytes.Buffer{},
@@ -327,13 +327,93 @@ func TestUsageIncludesAgentRoomUserTrees(t *testing.T) {
 
 	got := stderr.String()
 	for _, want := range []string{
-		"csgclaw agent list [flags]",
-		"csgclaw agent create [flags]",
-		"csgclaw room list [flags]",
-		"csgclaw user kick <id> [flags]",
+		"Available Commands:",
+		"agent    Manage agents",
+		"room     Manage rooms",
+		"user     Manage users",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("usage = %q, want substring %q", got, want)
+		}
+	}
+}
+
+func TestRootHelpIncludesAvailableCommands(t *testing.T) {
+	var stderr bytes.Buffer
+	app := &App{
+		stdout:     &bytes.Buffer{},
+		stderr:     &stderr,
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) { return nil, nil }),
+	}
+
+	err := app.Execute(context.Background(), []string{"-h"})
+	if err != flag.ErrHelp {
+		t.Fatalf("Execute() error = %v, want %v", err, flag.ErrHelp)
+	}
+
+	got := stderr.String()
+	for _, want := range []string{
+		"Available Commands:",
+		"agent    Manage agents",
+		"room     Manage rooms",
+		"user     Manage users",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("help = %q, want substring %q", got, want)
+		}
+	}
+}
+
+func TestAgentHelpIncludesSubcommands(t *testing.T) {
+	var stderr bytes.Buffer
+	app := &App{
+		stdout:     &bytes.Buffer{},
+		stderr:     &stderr,
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) { return nil, nil }),
+	}
+
+	err := app.Execute(context.Background(), []string{"agent", "-h"})
+	if err != flag.ErrHelp {
+		t.Fatalf("Execute() error = %v, want %v", err, flag.ErrHelp)
+	}
+
+	got := stderr.String()
+	for _, want := range []string{
+		"Manage agents.",
+		"csgclaw agent <subcommand> [flags]",
+		"list               List agents",
+		"create             Create an agent",
+		"delete <id>        Delete an agent",
+		"status [id]        Show one agent or list all agents",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("help = %q, want substring %q", got, want)
+		}
+	}
+}
+
+func TestAgentSubcommandHelpIncludesUsageAndFlags(t *testing.T) {
+	var stderr bytes.Buffer
+	app := &App{
+		stdout:     &bytes.Buffer{},
+		stderr:     &stderr,
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) { return nil, nil }),
+	}
+
+	err := app.Execute(context.Background(), []string{"agent", "list", "-h"})
+	if err != flag.ErrHelp {
+		t.Fatalf("Execute() error = %v, want %v", err, flag.ErrHelp)
+	}
+
+	got := stderr.String()
+	for _, want := range []string{
+		"List agents.",
+		"csgclaw agent list [flags]",
+		"Flags:",
+		"-filter string",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("help = %q, want substring %q", got, want)
 		}
 	}
 }

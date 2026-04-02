@@ -10,7 +10,22 @@ import (
 
 func (a *App) runAgent(ctx context.Context, args []string, globals GlobalOptions) error {
 	if len(args) == 0 {
-		return fmt.Errorf("agent subcommand is required")
+		a.usageCommandGroup("agent", "Manage agents.", "csgclaw agent <subcommand> [flags]", []string{
+			"list               List agents",
+			"create             Create an agent",
+			"delete <id>        Delete an agent",
+			"status [id]        Show one agent or list all agents",
+		})
+		return flag.ErrHelp
+	}
+	if isHelpArg(args[0]) {
+		a.usageCommandGroup("agent", "Manage agents.", "csgclaw agent <subcommand> [flags]", []string{
+			"list               List agents",
+			"create             Create an agent",
+			"delete <id>        Delete an agent",
+			"status [id]        Show one agent or list all agents",
+		})
+		return flag.ErrHelp
 	}
 
 	switch args[0] {
@@ -23,14 +38,18 @@ func (a *App) runAgent(ctx context.Context, args []string, globals GlobalOptions
 	case "status":
 		return a.runAgentStatus(ctx, args[1:], globals)
 	default:
+		a.usageCommandGroup("agent", "Manage agents.", "csgclaw agent <subcommand> [flags]", []string{
+			"list               List agents",
+			"create             Create an agent",
+			"delete <id>        Delete an agent",
+			"status [id]        Show one agent or list all agents",
+		})
 		return fmt.Errorf("unknown agent subcommand %q", args[0])
 	}
 }
 
 func (a *App) runAgentList(ctx context.Context, args []string, globals GlobalOptions) error {
-	fs := flag.NewFlagSet("agent list", flag.ContinueOnError)
-	fs.SetOutput(a.stderr)
-
+	fs := a.newCommandFlagSet("agent list", "csgclaw agent list [flags]", "List agents.")
 	filter := fs.String("filter", "", "filter by state")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -51,9 +70,7 @@ func (a *App) runAgentList(ctx context.Context, args []string, globals GlobalOpt
 }
 
 func (a *App) runAgentCreate(ctx context.Context, args []string, globals GlobalOptions) error {
-	fs := flag.NewFlagSet("agent create", flag.ContinueOnError)
-	fs.SetOutput(a.stderr)
-
+	fs := a.newCommandFlagSet("agent create", "csgclaw agent create [flags]", "Create an agent.")
 	id := fs.String("id", "", "agent id")
 	name := fs.String("name", "", "agent name")
 	description := fs.String("description", "", "agent description")
@@ -79,8 +96,7 @@ func (a *App) runAgentCreate(ctx context.Context, args []string, globals GlobalO
 }
 
 func (a *App) runAgentDelete(ctx context.Context, args []string, globals GlobalOptions) error {
-	fs := flag.NewFlagSet("agent delete", flag.ContinueOnError)
-	fs.SetOutput(a.stderr)
+	fs := a.newCommandFlagSet("agent delete", "csgclaw agent delete <id> [flags]", "Delete an agent.")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -95,8 +111,7 @@ func (a *App) runAgentDelete(ctx context.Context, args []string, globals GlobalO
 }
 
 func (a *App) runAgentStatus(ctx context.Context, args []string, globals GlobalOptions) error {
-	fs := flag.NewFlagSet("agent status", flag.ContinueOnError)
-	fs.SetOutput(a.stderr)
+	fs := a.newCommandFlagSet("agent status", "csgclaw agent status [id] [flags]", "Show one agent or list all agents.")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}

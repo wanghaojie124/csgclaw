@@ -85,6 +85,7 @@ func (a *App) Execute(ctx context.Context, args []string) error {
 func (a *App) parseGlobalOptions(args []string) (GlobalOptions, []string, error) {
 	fs := flag.NewFlagSet("csgclaw", flag.ContinueOnError)
 	fs.SetOutput(a.stderr)
+	fs.Usage = a.usage
 
 	opts := GlobalOptions{}
 	fs.StringVar(&opts.Endpoint, "endpoint", "", "HTTP server endpoint")
@@ -129,27 +130,71 @@ func consumesValue(arg string) bool {
 }
 
 func (a *App) usage() {
-	fmt.Fprintf(a.stderr, `csgclaw manages local CSGClaw agents.
+	fmt.Fprintln(a.stderr, "csgclaw manages local CSGClaw agents.")
+	fmt.Fprintln(a.stderr)
+	fmt.Fprintln(a.stderr, "Usage:")
+	fmt.Fprintln(a.stderr, "  csgclaw [global-flags] <command> [args]")
+	fmt.Fprintln(a.stderr)
+	fmt.Fprintln(a.stderr, "Available Commands:")
+	fmt.Fprintln(a.stderr, "  onboard  Initialize local config and bootstrap state")
+	fmt.Fprintln(a.stderr, "  serve    Start the local HTTP server")
+	fmt.Fprintln(a.stderr, "  start    Alias for serve")
+	fmt.Fprintln(a.stderr, "  stop     Stop the local HTTP server")
+	fmt.Fprintln(a.stderr, "  agent    Manage agents")
+	fmt.Fprintln(a.stderr, "  room     Manage rooms")
+	fmt.Fprintln(a.stderr, "  user     Manage users")
+	fmt.Fprintln(a.stderr)
+	fmt.Fprintln(a.stderr, "Examples:")
+	fmt.Fprintln(a.stderr, "  csgclaw -h")
+	fmt.Fprintln(a.stderr, "  csgclaw serve -h")
+	fmt.Fprintln(a.stderr, "  csgclaw agent -h")
+	fmt.Fprintln(a.stderr, "  csgclaw agent create -h")
+	fmt.Fprintln(a.stderr)
+	fmt.Fprintln(a.stderr, "Global flags:")
+	fmt.Fprintln(a.stderr, "  --endpoint string   HTTP server endpoint")
+	fmt.Fprintln(a.stderr, "  --token string      API authentication token")
+	fmt.Fprintln(a.stderr, "  --output string     Output format: table or json")
+	fmt.Fprintln(a.stderr, "  --config string     Path to config file")
+}
 
-Usage:
-  csgclaw onboard [flags]
-  csgclaw serve [-d|--daemon] [flags]
-  csgclaw start [-d|--daemon] [flags]
-  csgclaw stop [flags]
-  csgclaw agent list [flags]
-  csgclaw agent create [flags]
-  csgclaw agent delete <id> [flags]
-  csgclaw agent status [id] [flags]
-  csgclaw room list [flags]
-  csgclaw room create [flags]
-  csgclaw room delete <id> [flags]
-  csgclaw user list [flags]
-  csgclaw user kick <id> [flags]
+func (a *App) usageCommandGroup(command string, summary string, usageLine string, subcommands []string) {
+	fmt.Fprintf(a.stderr, "%s\n\n", summary)
+	fmt.Fprintln(a.stderr, "Usage:")
+	fmt.Fprintf(a.stderr, "  %s\n\n", usageLine)
+	fmt.Fprintln(a.stderr, "Available Subcommands:")
+	for _, line := range subcommands {
+		fmt.Fprintf(a.stderr, "  %s\n", line)
+	}
+	fmt.Fprintln(a.stderr)
+	fmt.Fprintf(a.stderr, "Run `csgclaw %s <subcommand> -h` for subcommand details.\n", command)
+}
 
-Global flags:
-  --endpoint string   HTTP server endpoint
-  --token string      API authentication token
-  --output string     Output format: table or json
-  --config string     Path to config file
-`)
+func (a *App) newCommandFlagSet(name string, usageLine string, summary string) *flag.FlagSet {
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
+	fs.SetOutput(a.stderr)
+	fs.Usage = func() {
+		if summary != "" {
+			fmt.Fprintf(a.stderr, "%s\n\n", summary)
+		}
+		fmt.Fprintln(a.stderr, "Usage:")
+		fmt.Fprintf(a.stderr, "  %s\n", usageLine)
+		if hasFlags(fs) {
+			fmt.Fprintln(a.stderr)
+			fmt.Fprintln(a.stderr, "Flags:")
+			fs.PrintDefaults()
+		}
+	}
+	return fs
+}
+
+func hasFlags(fs *flag.FlagSet) bool {
+	hasAny := false
+	fs.VisitAll(func(*flag.Flag) {
+		hasAny = true
+	})
+	return hasAny
+}
+
+func isHelpArg(arg string) bool {
+	return arg == "-h" || arg == "--help" || arg == "help"
 }

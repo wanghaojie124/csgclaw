@@ -11,7 +11,20 @@ import (
 
 func (a *App) runRoom(ctx context.Context, args []string, globals GlobalOptions) error {
 	if len(args) == 0 {
-		return fmt.Errorf("room subcommand is required")
+		a.usageCommandGroup("room", "Manage rooms.", "csgclaw room <subcommand> [flags]", []string{
+			"list               List rooms",
+			"create             Create a room",
+			"delete <id>        Delete a room",
+		})
+		return flag.ErrHelp
+	}
+	if isHelpArg(args[0]) {
+		a.usageCommandGroup("room", "Manage rooms.", "csgclaw room <subcommand> [flags]", []string{
+			"list               List rooms",
+			"create             Create a room",
+			"delete <id>        Delete a room",
+		})
+		return flag.ErrHelp
 	}
 
 	switch args[0] {
@@ -22,13 +35,17 @@ func (a *App) runRoom(ctx context.Context, args []string, globals GlobalOptions)
 	case "delete":
 		return a.runRoomDelete(ctx, args[1:], globals)
 	default:
+		a.usageCommandGroup("room", "Manage rooms.", "csgclaw room <subcommand> [flags]", []string{
+			"list               List rooms",
+			"create             Create a room",
+			"delete <id>        Delete a room",
+		})
 		return fmt.Errorf("unknown room subcommand %q", args[0])
 	}
 }
 
 func (a *App) runRoomList(ctx context.Context, args []string, globals GlobalOptions) error {
-	fs := flag.NewFlagSet("room list", flag.ContinueOnError)
-	fs.SetOutput(a.stderr)
+	fs := a.newCommandFlagSet("room list", "csgclaw room list [flags]", "List rooms.")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -45,9 +62,7 @@ func (a *App) runRoomList(ctx context.Context, args []string, globals GlobalOpti
 }
 
 func (a *App) runRoomCreate(ctx context.Context, args []string, globals GlobalOptions) error {
-	fs := flag.NewFlagSet("room create", flag.ContinueOnError)
-	fs.SetOutput(a.stderr)
-
+	fs := a.newCommandFlagSet("room create", "csgclaw room create [flags]", "Create a room.")
 	title := fs.String("title", "", "room title")
 	description := fs.String("description", "", "room description")
 	creatorID := fs.String("creator-id", "", "room creator id")
@@ -75,8 +90,7 @@ func (a *App) runRoomCreate(ctx context.Context, args []string, globals GlobalOp
 }
 
 func (a *App) runRoomDelete(ctx context.Context, args []string, globals GlobalOptions) error {
-	fs := flag.NewFlagSet("room delete", flag.ContinueOnError)
-	fs.SetOutput(a.stderr)
+	fs := a.newCommandFlagSet("room delete", "csgclaw room delete <id> [flags]", "Delete a room.")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}

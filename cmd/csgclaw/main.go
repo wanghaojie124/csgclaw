@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"flag"
 	"log"
 	"os"
 
@@ -13,6 +15,9 @@ func main() {
 
 	app := cli.New()
 	if err := app.Execute(context.Background(), os.Args[1:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return
+		}
 		log.Fatal(err)
 	}
 }
