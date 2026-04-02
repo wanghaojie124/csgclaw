@@ -376,11 +376,11 @@ func TestPicoclawBoxEnvVars(t *testing.T) {
 	}
 }
 
-func TestResolveManagerBaseURLPrefersEn0IP(t *testing.T) {
-	orig := en0IPv4Resolver
-	en0IPv4Resolver = func() string { return "10.0.0.8" }
+func TestResolveManagerBaseURLPrefersLocalIP(t *testing.T) {
+	orig := localIPv4Resolver
+	localIPv4Resolver = func() string { return "10.0.0.8" }
 	t.Cleanup(func() {
-		en0IPv4Resolver = orig
+		localIPv4Resolver = orig
 	})
 
 	got := resolveManagerBaseURL(config.ServerConfig{

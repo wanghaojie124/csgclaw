@@ -28,7 +28,7 @@ const (
 	boxProjectsDir     = "/home/picoclaw/.picoclaw/workspace/projects"
 )
 
-var en0IPv4Resolver = en0IPv4
+var localIPv4Resolver = localIPv4
 
 var (
 	testEnsureRuntimeHook    func(*Service, string) (*boxlite.Runtime, error)

@@ -134,7 +134,7 @@ func resolveManagerBaseURL(server config.ServerConfig) string {
 			port = resolvedPort
 		}
 	}
-	if ip := en0IPv4Resolver(); ip != "" {
+	if ip := localIPv4Resolver(); ip != "" {
 		return fmt.Sprintf("http://%s:%s", ip, port)
 	}
 	if server.APIBaseURL != "" {
@@ -143,28 +143,70 @@ func resolveManagerBaseURL(server config.ServerConfig) string {
 	return ""
 }
 
-func en0IPv4() string {
-	iface, err := net.InterfaceByName("en0")
+func localIPv4() string {
+	if ip := outboundIPv4(); ip != "" {
+		return ip
+	}
+	return interfaceIPv4()
+}
+
+func outboundIPv4() string {
+	conn, err := net.Dial("udp4", "8.8.8.8:80")
 	if err != nil {
 		return ""
 	}
-	addrs, err := iface.Addrs()
+	defer conn.Close()
+
+	addr, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok || addr.IP == nil {
+		return ""
+	}
+	ip := addr.IP.To4()
+	if ip == nil || ip.IsLoopback() || ip.IsUnspecified() {
+		return ""
+	}
+	return ip.String()
+}
+
+func interfaceIPv4() string {
+	ifaces, err := net.Interfaces()
 	if err != nil {
 		return ""
 	}
-	for _, addr := range addrs {
-		switch v := addr.(type) {
-		case *net.IPNet:
-			if ip := v.IP.To4(); ip != nil {
-				return ip.String()
-			}
-		case *net.IPAddr:
-			if ip := v.IP.To4(); ip != nil {
-				return ip.String()
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			if ip := ipv4FromAddr(addr); ip != "" {
+				return ip
 			}
 		}
 	}
 	return ""
+}
+
+func ipv4FromAddr(addr net.Addr) string {
+	switch v := addr.(type) {
+	case *net.IPNet:
+		ip := v.IP.To4()
+		if ip == nil || ip.IsLoopback() || ip.IsUnspecified() {
+			return ""
+		}
+		return ip.String()
+	case *net.IPAddr:
+		ip := v.IP.To4()
+		if ip == nil || ip.IsLoopback() || ip.IsUnspecified() {
+			return ""
+		}
+		return ip.String()
+	default:
+		return ""
+	}
 }
 
 func renderManagerSecurityConfig(llm config.LLMConfig) string {
