@@ -41,9 +41,17 @@ func (s *Service) ensureRuntime(agentName string) (*boxlite.Runtime, error) {
 }
 
 func boxRuntimeHome(agentName string) (string, error) {
+	agentHome, err := agentHomeDir(agentName)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(agentHome, config.RuntimeHomeDirName), nil
+}
+
+func agentHomeDir(agentName string) (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve host home dir: %w", err)
 	}
-	return filepath.Join(homeDir, config.AppDirName, managerAgentsDirName, agentName, config.RuntimeHomeDirName), nil
+	return filepath.Join(homeDir, config.AppDirName, managerAgentsDirName, agentName), nil
 }

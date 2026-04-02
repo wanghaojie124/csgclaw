@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -307,6 +308,15 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 		if err := s.forceRemoveBox(ctx, rt, boxIDOrName); err != nil && !boxlite.IsNotFound(err) {
 			return fmt.Errorf("remove agent box: %w", err)
 		}
+		_ = rt.Close()
+	}
+
+	agentHome, err := agentHomeDir(existing.Name)
+	if err != nil {
+		return err
+	}
+	if err := os.RemoveAll(agentHome); err != nil {
+		return fmt.Errorf("remove agent home: %w", err)
 	}
 
 	s.mu.Lock()
@@ -319,7 +329,6 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	delete(s.agents, id)
 	delete(s.boxes, id)
 	if rt := s.runtimes[current.Name]; rt != nil {
-		_ = rt.Close()
 		delete(s.runtimes, current.Name)
 	}
 	return s.saveLocked()

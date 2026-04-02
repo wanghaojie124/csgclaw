@@ -171,6 +171,54 @@ func TestDeleteRemovesAgentFromState(t *testing.T) {
 	}
 }
 
+func TestDeleteRemovesAgentHomeDirectory(t *testing.T) {
+	SetTestHooks(
+		func(_ *Service, _ string) (*boxlite.Runtime, error) { return nil, nil },
+		nil,
+	)
+	defer ResetTestHooks()
+
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", "", "")
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	svc.agents["u-alice"] = Agent{
+		ID:        "u-alice",
+		Name:      "alice",
+		Role:      RoleWorker,
+		Status:    "running",
+		CreatedAt: time.Date(2026, 4, 1, 11, 0, 0, 0, time.UTC),
+	}
+
+	agentHome, err := agentHomeDir("alice")
+	if err != nil {
+		t.Fatalf("agentHomeDir() error = %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(agentHome, config.RuntimeHomeDirName), 0o755); err != nil {
+		t.Fatalf("os.MkdirAll(agent runtime) error = %v", err)
+	}
+	sharedProjects, err := ensureAgentProjectsRoot()
+	if err != nil {
+		t.Fatalf("ensureAgentProjectsRoot() error = %v", err)
+	}
+
+	if err := svc.Delete(context.Background(), "u-alice"); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+
+	if _, err := os.Stat(agentHome); !os.IsNotExist(err) {
+		t.Fatalf("os.Stat(agentHome) error = %v, want not exist", err)
+	}
+	if info, err := os.Stat(sharedProjects); err != nil {
+		t.Fatalf("os.Stat(sharedProjects) error = %v", err)
+	} else if !info.IsDir() {
+		t.Fatalf("shared projects path is not a directory: %q", sharedProjects)
+	}
+}
+
 func TestDeletePrefersBoxIDOverName(t *testing.T) {
 	SetTestHooks(
 		func(_ *Service, _ string) (*boxlite.Runtime, error) { return &boxlite.Runtime{}, nil },
