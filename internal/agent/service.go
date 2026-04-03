@@ -356,8 +356,12 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	}
 	delete(s.agents, id)
 	delete(s.boxes, id)
-	if rt := s.runtimes[current.Name]; rt != nil {
-		delete(s.runtimes, current.Name)
+	runtimeHome, err := boxRuntimeHome(current.Name)
+	if err != nil {
+		return err
+	}
+	if rt := s.runtimes[runtimeHome]; rt != nil {
+		delete(s.runtimes, runtimeHome)
 	}
 	return s.saveLocked()
 }

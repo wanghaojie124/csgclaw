@@ -290,6 +290,48 @@ func TestDeletePrefersBoxIDOverName(t *testing.T) {
 	}
 }
 
+func TestDeleteRemovesRuntimeCacheByHomeDir(t *testing.T) {
+	SetTestHooks(
+		func(_ *Service, _ string) (*boxlite.Runtime, error) { return &boxlite.Runtime{}, nil },
+		nil,
+	)
+	defer ResetTestHooks()
+	testForceRemoveBoxHook = func(_ *Service, _ context.Context, _ *boxlite.Runtime, _ string) error {
+		return nil
+	}
+	defer func() {
+		testForceRemoveBoxHook = nil
+	}()
+
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", "")
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	svc.agents["u-alice"] = Agent{
+		ID:        "u-alice",
+		Name:      "alice",
+		Role:      RoleWorker,
+		Status:    "running",
+		CreatedAt: time.Date(2026, 4, 1, 11, 0, 0, 0, time.UTC),
+	}
+
+	runtimeHome, err := boxRuntimeHome("alice")
+	if err != nil {
+		t.Fatalf("boxRuntimeHome() error = %v", err)
+	}
+	svc.runtimes[runtimeHome] = &boxlite.Runtime{}
+
+	if err := svc.Delete(context.Background(), "u-alice"); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	if _, ok := svc.runtimes[runtimeHome]; ok {
+		t.Fatalf("Delete() kept runtime cache for %q", runtimeHome)
+	}
+}
+
 func TestCreateWorkerStoresBoxID(t *testing.T) {
 	SetTestHooks(
 		func(_ *Service, _ string) (*boxlite.Runtime, error) { return nil, nil },
