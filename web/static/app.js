@@ -72,12 +72,9 @@ const messages = {
     minutesAgo: "{count} 分钟前",
     roomMembers: "{count} 名成员",
     roles: {
-      Admin: "管理员",
-      Manager: "经理",
-      Product: "产品",
-      Design: "设计",
-      Backend: "后端",
-      Ops: "运维",
+      admin: "管理员",
+      manager: "经理",
+      worker: "成员",
     },
     errors: {
       "title is required": "标题不能为空",
@@ -144,12 +141,9 @@ const messages = {
     minutesAgo: "{count} min ago",
     roomMembers: "{count} members",
     roles: {
-      Admin: "Admin",
-      Manager: "Manager",
-      Product: "Product",
-      Design: "Design",
-      Backend: "Backend",
-      Ops: "Ops",
+      admin: "admin",
+      manager: "manager",
+      worker: "worker",
     },
     errors: {
       "title is required": "Title is required",
@@ -695,6 +689,13 @@ function App() {
                       ? html`<div className="messages-empty">${t("noVisibleMessages")}</div>`
                       : null}
                   ${visibleMessages.map((message) => {
+                    if (isEventMessage(message)) {
+                      return html`
+                        <div key=${message.id} className="message-event-row">
+                          <div className="message-event-text">${message.content}</div>
+                        </div>
+                      `;
+                    }
                     const user = usersById.get(message.sender_id);
                     const own = message.sender_id === data.current_user_id;
                     return html`
@@ -939,6 +940,26 @@ function getMentionState(text, textarea) {
 
 function isToolCallMessage(content) {
   return (content ?? "").trimStart().startsWith("🔧 ");
+}
+
+function isEventMessage(message) {
+  if (message?.kind === "event") {
+    return true;
+  }
+  return isLegacySystemEventContent(message?.content);
+}
+
+function isLegacySystemEventContent(content) {
+  const text = (content ?? "").trim();
+  if (!text) {
+    return false;
+  }
+  return [
+    /^.+ invited .+ to join the room\.?$/,
+    /^.+ created the room ".+"\.?$/,
+    /^.+ 邀请 .+ 加入了房间。?$/,
+    /^.+ 创建了房间“.+”。?$/,
+  ].some((pattern) => pattern.test(text));
 }
 
 function resolveConversationUser(conversation, currentUserID, usersById) {

@@ -301,7 +301,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_common_args(join_worker)
     join_worker.add_argument("--room-id", required=True, help="Room id.")
     join_worker.add_argument("--worker-id", required=True, help="Worker agent id.")
-    join_worker.add_argument("--inviter-id", default="u-admin", help="Inviter id. Default: u-admin.")
+    join_worker.add_argument("--inviter-id", default="u-manager", help="Inviter id. Default: u-manager.")
     join_worker.add_argument("--locale", help="Optional locale, for example zh-CN.")
     join_worker.set_defaults(func=cmd_join_worker)
 

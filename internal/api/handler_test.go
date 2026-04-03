@@ -103,8 +103,8 @@ func TestEnsureWorkerIMStatePublishesBootstrapRoom(t *testing.T) {
 	if second.Room == nil {
 		t.Fatal("second event.Room = nil, want bootstrap room")
 	}
-	if second.Room.Title != "Alice" {
-		t.Fatalf("second event.Room.Title = %q, want %q", second.Room.Title, "Alice")
+	if second.Room.Title != "alice" {
+		t.Fatalf("second event.Room.Title = %q, want %q", second.Room.Title, "alice")
 	}
 	if !containsParticipant(second.Room.Participants, "u-admin") || !containsParticipant(second.Room.Participants, "u-alice") {
 		t.Fatalf("second event.Room.Participants = %+v, want admin and worker", second.Room.Participants)
@@ -293,8 +293,8 @@ func TestHandleRoomsInviteAliasAddsConversationMembers(t *testing.T) {
 		im: im.NewServiceFromBootstrap(im.Bootstrap{
 			CurrentUserID: "u-admin",
 			Users: []im.User{
-				{ID: "u-admin", Name: "Admin", Handle: "admin"},
-				{ID: "u-manager", Name: "Manager", Handle: "manager"},
+				{ID: "u-admin", Name: "admin", Handle: "admin"},
+				{ID: "u-manager", Name: "manager", Handle: "manager"},
 			},
 			Conversations: []im.Conversation{
 				{
@@ -334,7 +334,7 @@ func TestHandleIMAgentJoinReturnsCompactSuccessPayload(t *testing.T) {
 		im: im.NewServiceFromBootstrap(im.Bootstrap{
 			CurrentUserID: "u-admin",
 			Users: []im.User{
-				{ID: "u-admin", Name: "Admin", Handle: "admin"},
+				{ID: "u-admin", Name: "admin", Handle: "admin"},
 				{ID: "u-alice", Name: "Alice", Handle: "alice"},
 			},
 			Conversations: []im.Conversation{
@@ -489,8 +489,8 @@ func TestHandleUsersReturnsUserList(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if len(got) < 2 || got[0].Name != "Admin" || got[1].Name != "Alice" {
-		t.Fatalf("users = %+v, want sorted users starting with Admin/Alice", got)
+	if len(got) != 4 || got[0].Name != "admin" || got[1].Name != "alice" || got[2].Name != "manager" || got[3].Name != "zed" {
+		t.Fatalf("users = %+v, want admin/alice/manager/zed", got)
 	}
 }
 
@@ -555,8 +555,8 @@ func TestHandleMessagesPostCreatesMessage(t *testing.T) {
 		im: im.NewServiceFromBootstrap(im.Bootstrap{
 			CurrentUserID: "u-admin",
 			Users: []im.User{
-				{ID: "u-admin", Name: "Admin", Handle: "admin"},
-				{ID: "u-manager", Name: "Manager", Handle: "manager"},
+				{ID: "u-admin", Name: "admin", Handle: "admin"},
+				{ID: "u-manager", Name: "manager", Handle: "manager"},
 			},
 			Conversations: []im.Conversation{
 				{
@@ -625,7 +625,7 @@ func TestHandleIMEventsExposeRoomIDOnly(t *testing.T) {
 			SenderID: "u-admin",
 			Content:  "hello",
 		},
-		Sender: &im.User{ID: "u-admin", Name: "Admin", Handle: "admin"},
+		Sender: &im.User{ID: "u-admin", Name: "admin", Handle: "admin"},
 	})
 	time.Sleep(20 * time.Millisecond)
 	cancel()
@@ -645,9 +645,9 @@ func TestHandleRoomsPostCreatesRoom(t *testing.T) {
 		im: im.NewServiceFromBootstrap(im.Bootstrap{
 			CurrentUserID: "u-admin",
 			Users: []im.User{
-				{ID: "u-admin", Name: "Admin", Handle: "admin"},
+				{ID: "u-admin", Name: "admin", Handle: "admin"},
 				{ID: "u-alice", Name: "Alice", Handle: "alice"},
-				{ID: "u-manager", Name: "Manager", Handle: "manager"},
+				{ID: "u-manager", Name: "manager", Handle: "manager"},
 			},
 		}),
 	}
@@ -677,7 +677,7 @@ func TestHandleUsersDeleteKicksUser(t *testing.T) {
 		im: im.NewServiceFromBootstrap(im.Bootstrap{
 			CurrentUserID: "u-admin",
 			Users: []im.User{
-				{ID: "u-admin", Name: "Admin", Handle: "admin", IsOnline: true},
+				{ID: "u-admin", Name: "admin", Handle: "admin", IsOnline: true},
 				{ID: "u-alice", Name: "Alice", Handle: "alice", IsOnline: true},
 			},
 			Conversations: []im.Conversation{

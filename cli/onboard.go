@@ -64,7 +64,7 @@ func (a *App) runOnboard(args []string, globals GlobalOptions) error {
 
 	fmt.Fprintf(a.stdout, "initialized config at %s\n", path)
 	fmt.Fprintf(a.stdout, "ensured bootstrap agent %q with image %q\n", agent.ManagerName, cfg.Bootstrap.ManagerImage)
-	fmt.Fprintf(a.stdout, "ensured IM members %q and %q\n", "Admin", "Manager")
+	fmt.Fprintf(a.stdout, "ensured IM members %q and %q\n", "admin", "manager")
 	fmt.Fprintln(a.stdout, "cleared IM invite draft data")
 	if *forceRecreateManager {
 		fmt.Fprintln(a.stdout, "manager box was force-recreated")

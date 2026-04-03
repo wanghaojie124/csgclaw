@@ -89,7 +89,7 @@ func TestListRoomsUsersAndMessages(t *testing.T) {
 	later := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
 	svc := NewServiceFromBootstrap(Bootstrap{
 		CurrentUserID: "u-admin",
-		Users: []User{
+	Users: []User{
 			{ID: "u-zed", Name: "Zed", Handle: "zed", Role: "Worker"},
 			{ID: "u-alice", Name: "Alice", Handle: "alice", Role: "Worker"},
 		},
@@ -121,8 +121,8 @@ func TestListRoomsUsersAndMessages(t *testing.T) {
 	if len(users) != 4 {
 		t.Fatalf("len(ListUsers()) = %d, want 4 including ensured admin/manager", len(users))
 	}
-	if users[0].Name != "Admin" || users[1].Name != "Alice" {
-		t.Fatalf("ListUsers() leading order = [%s, %s], want Admin then Alice", users[0].Name, users[1].Name)
+	if users[0].Name != "admin" || users[1].Name != "alice" || users[2].Name != "manager" || users[3].Name != "zed" {
+		t.Fatalf("ListUsers() order = [%s, %s, %s, %s], want admin, alice, manager, zed", users[0].Name, users[1].Name, users[2].Name, users[3].Name)
 	}
 
 	gotMessages, err := svc.ListMessages("room-1")
@@ -161,7 +161,7 @@ func TestKickUserRemovesUserFromStateConversationsAndMessages(t *testing.T) {
 	svc := NewServiceFromBootstrap(Bootstrap{
 		CurrentUserID: "u-admin",
 		Users: []User{
-			{ID: "u-admin", Name: "Admin", Handle: "admin"},
+			{ID: "u-admin", Name: "admin", Handle: "admin"},
 			{ID: "u-alice", Name: "Alice", Handle: "alice"},
 			{ID: "u-bob", Name: "Bob", Handle: "bob"},
 		},

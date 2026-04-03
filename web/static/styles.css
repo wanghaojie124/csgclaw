@@ -627,6 +627,23 @@ body::after {
   animation: rise-in 240ms ease both;
 }
 
+.message-event-row {
+  align-self: center;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  animation: rise-in 240ms ease both;
+}
+
+.message-event-text {
+  max-width: min(100%, 560px);
+  padding: 2px 14px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+
 .message-row.own {
   align-self: flex-end;
   flex-direction: row-reverse;

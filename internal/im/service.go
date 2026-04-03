@@ -27,6 +27,7 @@ type User struct {
 type Message struct {
 	ID        string    `json:"id"`
 	SenderID  string    `json:"sender_id"`
+	Kind      string    `json:"kind,omitempty"`
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"created_at"`
 	Mentions  []string  `json:"mentions"`
@@ -225,29 +226,53 @@ func normalizeRooms(rooms, conversations []Room) []Room {
 
 func ensureUsers(users []User) []User {
 	result := append([]User(nil), users...)
+	for i := range result {
+		result[i] = normalizeUser(result[i])
+	}
 	if !hasUserHandle(result, "admin") {
 		result = append(result, User{
 			ID:        "u-admin",
-			Name:      "Admin",
+			Name:      "admin",
 			Handle:    "admin",
-			Role:      "Admin",
+			Role:      "admin",
 			Avatar:    "AD",
 			IsOnline:  true,
 			AccentHex: "#dc2626",
 		})
+	} else {
+		for i := range result {
+			if strings.EqualFold(strings.TrimSpace(result[i].Handle), "admin") {
+				result[i].Name = "admin"
+				result[i].Role = "admin"
+			}
+		}
 	}
 	if !hasUserHandle(result, "manager") {
 		result = append(result, User{
 			ID:        "u-manager",
-			Name:      "Manager",
+			Name:      "manager",
 			Handle:    "manager",
-			Role:      "Manager",
+			Role:      "manager",
 			Avatar:    "MG",
 			IsOnline:  true,
 			AccentHex: "#0f766e",
 		})
+	} else {
+		for i := range result {
+			if strings.EqualFold(strings.TrimSpace(result[i].Handle), "manager") {
+				result[i].Name = "manager"
+				result[i].Role = "manager"
+			}
+		}
 	}
 	return result
+}
+
+func normalizeUser(user User) User {
+	user.Name = strings.ToLower(strings.TrimSpace(user.Name))
+	user.Handle = strings.ToLower(strings.TrimSpace(user.Handle))
+	user.Role = strings.ToLower(strings.TrimSpace(user.Role))
+	return user
 }
 
 func hasUserHandle(users []User, handle string) bool {
@@ -291,6 +316,23 @@ func cloneRooms(rooms []Room) []Room {
 func ensureAdminManagerRoom(rooms []Room) []Room {
 	for _, room := range rooms {
 		if containsUserIDInRoom(room, "u-admin") && containsUserIDInRoom(room, "u-manager") {
+			normalized := room
+			if normalized.Title == "Admin & Manager" {
+				normalized.Title = "admin & manager"
+			}
+			if normalized.Description == "Bootstrap room for Admin and Manager." {
+				normalized.Description = "Bootstrap room for admin and manager."
+			}
+			if len(normalized.Messages) > 0 && normalized.Messages[0].Content == "Bootstrap room created for Admin and Manager." {
+				normalized.Messages[0].Content = "Bootstrap room created for admin and manager."
+			}
+			updated := append([]Room(nil), rooms...)
+			for i := range updated {
+				if updated[i].ID == normalized.ID {
+					updated[i] = normalized
+					return updated
+				}
+			}
 			return rooms
 		}
 	}
@@ -298,15 +340,15 @@ func ensureAdminManagerRoom(rooms []Room) []Room {
 	now := time.Now().UTC()
 	room := Room{
 		ID:           fmt.Sprintf("room-%d", now.UnixNano()),
-		Title:        "Admin & Manager",
+		Title:        "admin & manager",
 		Subtitle:     formatConversationSubtitle(2),
-		Description:  "Bootstrap room for Admin and Manager.",
+		Description:  "Bootstrap room for admin and manager.",
 		Participants: []string{"u-admin", "u-manager"},
 		Messages: []Message{
 			{
 				ID:        fmt.Sprintf("msg-%d", now.UnixNano()+1),
 				SenderID:  "u-manager",
-				Content:   "Bootstrap room created for Admin and Manager.",
+				Content:   "Bootstrap room created for admin and manager.",
 				CreatedAt: now,
 			},
 		},
@@ -464,9 +506,9 @@ func (s *Service) KickUser(userID string) error {
 
 func (s *Service) EnsureAgentUser(req EnsureAgentUserRequest) (User, *Room, error) {
 	id := strings.TrimSpace(req.ID)
-	name := strings.TrimSpace(req.Name)
-	handle := strings.TrimSpace(req.Handle)
-	role := strings.TrimSpace(req.Role)
+	name := strings.ToLower(strings.TrimSpace(req.Name))
+	handle := strings.ToLower(strings.TrimSpace(req.Handle))
+	role := strings.ToLower(strings.TrimSpace(req.Role))
 	switch {
 	case id == "":
 		return User{}, nil, fmt.Errorf("id is required")
@@ -476,7 +518,7 @@ func (s *Service) EnsureAgentUser(req EnsureAgentUserRequest) (User, *Room, erro
 		return User{}, nil, fmt.Errorf("handle is required")
 	}
 	if role == "" {
-		role = "Worker"
+		role = "worker"
 	}
 
 	s.mu.Lock()
@@ -545,7 +587,7 @@ func (s *Service) CreateMessage(req CreateMessageRequest) (Message, error) {
 		return Message{}, fmt.Errorf("room not found")
 	}
 
-	message := s.newMessage("", req.SenderID, content)
+	message := s.newMessage("", req.SenderID, MessageKindMessage, content)
 	room.Messages = append(room.Messages, message)
 	if err := s.saveLocked(); err != nil {
 		return Message{}, err
@@ -578,7 +620,7 @@ func (s *Service) DeliverMessage(req DeliverMessageRequest) (Message, error) {
 		return Message{}, fmt.Errorf("room not found")
 	}
 
-	message := s.newMessage(req.MessageID, senderID, content)
+	message := s.newMessage(req.MessageID, senderID, MessageKindMessage, content)
 	room.Messages = append(room.Messages, message)
 	if err := s.saveLocked(); err != nil {
 		return Message{}, err
@@ -618,7 +660,8 @@ func (s *Service) CreateRoom(req CreateRoomRequest) (Room, error) {
 			{
 				ID:        fmt.Sprintf("msg-%d", time.Now().UnixNano()),
 				SenderID:  req.CreatorID,
-				Content:   s.localizeSystemText(req.Locale, "room_created", title, nil),
+				Kind:      MessageKindEvent,
+				Content:   s.localizeSystemText(req.Locale, "room_created", req.CreatorID, title, nil),
 				CreatedAt: time.Now().UTC(),
 			},
 		},
@@ -690,7 +733,8 @@ func (s *Service) AddRoomMembers(req AddRoomMembersRequest) (Room, error) {
 	room.Messages = append(room.Messages, Message{
 		ID:        fmt.Sprintf("msg-%d", time.Now().UnixNano()),
 		SenderID:  req.InviterID,
-		Content:   s.localizeSystemText(req.Locale, "room_members_added", "", addedIDs),
+		Kind:      MessageKindEvent,
+		Content:   s.localizeSystemText(req.Locale, "room_members_added", req.InviterID, "", addedIDs),
 		CreatedAt: time.Now().UTC(),
 		Mentions:  append([]string(nil), addedIDs...),
 	})
@@ -787,44 +831,51 @@ func (s *Service) normalizeParticipants(creatorID string, participantIDs []strin
 	return participants, nil
 }
 
-func (s *Service) formatUserList(userIDs []string) string {
-	names := make([]string, 0, len(userIDs))
-	for _, userID := range userIDs {
-		if user, ok := s.users[userID]; ok {
-			names = append(names, "@"+user.Handle)
-		}
-	}
-	return strings.Join(names, "、")
-}
+const (
+	MessageKindMessage = "message"
+	MessageKindEvent   = "event"
+)
 
-func (s *Service) localizeSystemText(locale, key, title string, userIDs []string) string {
+func (s *Service) localizeSystemText(locale, key, actorID, title string, userIDs []string) string {
+	actor := s.userDisplayName(actorID)
+	targets := s.userDisplayNames(userIDs)
 	switch normalizeLocale(locale) {
 	case "en":
 		switch key {
 		case "room_created":
-			return fmt.Sprintf("Created room \"%s\". Welcome everyone.", title)
+			return fmt.Sprintf("%s created the room \"%s\"", actor, title)
 		case "room_members_added":
-			return fmt.Sprintf("Added %s to the room.", strings.Join(s.formatHandles(userIDs), ", "))
+			return fmt.Sprintf("%s invited %s to join the room", actor, strings.Join(targets, ", "))
 		}
 	default:
 		switch key {
 		case "room_created":
-			return fmt.Sprintf("已创建房间“%s”，欢迎大家加入。", title)
+			return fmt.Sprintf("%s 创建了房间“%s”", actor, title)
 		case "room_members_added":
-			return fmt.Sprintf("已将 %s 添加到房间。", s.formatUserList(userIDs))
+			return fmt.Sprintf("%s 邀请 %s 加入了房间", actor, strings.Join(targets, "、"))
 		}
 	}
 	return ""
 }
 
-func (s *Service) formatHandles(userIDs []string) []string {
-	handles := make([]string, 0, len(userIDs))
-	for _, userID := range userIDs {
-		if user, ok := s.users[userID]; ok {
-			handles = append(handles, "@"+user.Handle)
+func (s *Service) userDisplayName(userID string) string {
+	if user, ok := s.users[userID]; ok {
+		if strings.TrimSpace(user.Name) != "" {
+			return user.Name
+		}
+		if strings.TrimSpace(user.Handle) != "" {
+			return "@" + user.Handle
 		}
 	}
-	return handles
+	return userID
+}
+
+func (s *Service) userDisplayNames(userIDs []string) []string {
+	names := make([]string, 0, len(userIDs))
+	for _, userID := range userIDs {
+		names = append(names, s.userDisplayName(userID))
+	}
+	return names
 }
 
 func normalizeLocale(locale string) string {
@@ -874,13 +925,17 @@ func cloneConversation(conv Conversation) Conversation {
 	return cloneRoom(conv)
 }
 
-func (s *Service) newMessage(messageID, senderID, content string) Message {
+func (s *Service) newMessage(messageID, senderID, kind, content string) Message {
 	if strings.TrimSpace(messageID) == "" {
 		messageID = fmt.Sprintf("msg-%d", time.Now().UnixNano())
+	}
+	if strings.TrimSpace(kind) == "" {
+		kind = MessageKindMessage
 	}
 	return Message{
 		ID:        messageID,
 		SenderID:  senderID,
+		Kind:      kind,
 		Content:   content,
 		CreatedAt: time.Now().UTC(),
 		Mentions:  s.extractMentions(content),
@@ -932,13 +987,13 @@ func (s *Service) ensureAdminAgentRoomLocked(agentID, agentName string) (*Room, 
 		ID:           fmt.Sprintf("room-%d", now.UnixNano()),
 		Title:        agentName,
 		Subtitle:     formatRoomSubtitle(2),
-		Description:  fmt.Sprintf("Bootstrap room for Admin and %s.", agentName),
+		Description:  fmt.Sprintf("Bootstrap room for admin and %s.", agentName),
 		Participants: []string{"u-admin", agentID},
 		Messages: []Message{
 			{
 				ID:        fmt.Sprintf("msg-%d", now.UnixNano()+1),
 				SenderID:  agentID,
-				Content:   fmt.Sprintf("Bootstrap room created for Admin and %s.", agentName),
+				Content:   fmt.Sprintf("Bootstrap room created for admin and %s.", agentName),
 				CreatedAt: now,
 			},
 		},

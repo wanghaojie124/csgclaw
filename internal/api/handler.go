@@ -493,7 +493,7 @@ func deriveAgentHandle(a agent.Agent) string {
 func displayRole(role string) string {
 	switch strings.ToLower(strings.TrimSpace(role)) {
 	case agent.RoleManager:
-		return "Manager"
+		return "manager"
 	case agent.RoleWorker:
 		return "Worker"
 	default:
