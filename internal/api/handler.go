@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"csgclaw/internal/agent"
 	"csgclaw/internal/im"
@@ -684,8 +685,34 @@ func (h *Handler) ensureWorkerIMState(created agent.Agent) error {
 	h.publishUserEvent(im.EventTypeUserCreated, user)
 	if room != nil {
 		h.publishRoomEvent(im.EventTypeRoomCreated, *room)
+		imSvc := h.im
+		roomID := room.ID
+		name := created.Name
+		description := created.Description
+		go func() {
+			time.Sleep(time.Second)
+			message, err := imSvc.CreateMessage(im.CreateMessageRequest{
+				RoomID:   roomID,
+				SenderID: "u-admin",
+				Content:  buildWorkerBootstrapMessage(name, description),
+			})
+			if err != nil {
+				return
+			}
+			h.publishMessageCreated(roomID, message.SenderID, message)
+		}()
 	}
 	return nil
+}
+
+func buildWorkerBootstrapMessage(name, description string) string {
+	name = strings.TrimSpace(name)
+	description = strings.TrimSpace(description)
+	message := fmt.Sprintf("@%s Write this down in your memory: your name is %s.", name, name)
+	if description == "" {
+		return message
+	}
+	return fmt.Sprintf("%s Your responsibility is %s", message, description)
 }
 
 func (h *Handler) publishMessageCreated(conversationID, senderID string, message im.Message) {

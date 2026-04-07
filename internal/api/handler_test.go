@@ -56,7 +56,7 @@ func TestDeriveAgentHandle(t *testing.T) {
 		},
 		{
 			name:  "fallback to id",
-			agent: agent.Agent{Name: "中文 名字", ID: "u-worker_01", Role: agent.RoleWorker},
+			agent: agent.Agent{Name: "!!!", ID: "u-worker_01", Role: agent.RoleWorker},
 			want:  "worker_01",
 		},
 	}
@@ -81,9 +81,10 @@ func TestEnsureWorkerIMStatePublishesBootstrapRoom(t *testing.T) {
 	}
 
 	created := agent.Agent{
-		ID:   "u-alice",
-		Name: "Alice",
-		Role: agent.RoleWorker,
+		ID:          "u-alice",
+		Name:        "Alice",
+		Description: "test lead",
+		Role:        agent.RoleWorker,
 	}
 	if err := srv.ensureWorkerIMState(created); err != nil {
 		t.Fatalf("ensureWorkerIMState() error = %v", err)
@@ -109,6 +110,30 @@ func TestEnsureWorkerIMStatePublishesBootstrapRoom(t *testing.T) {
 	}
 	if !containsParticipant(second.Room.Participants, "u-admin") || !containsParticipant(second.Room.Participants, "u-alice") {
 		t.Fatalf("second event.Room.Participants = %+v, want admin and worker", second.Room.Participants)
+	}
+
+	select {
+	case evt := <-events:
+		t.Fatalf("unexpected third event before delay: %q", evt.Type)
+	case <-time.After(150 * time.Millisecond):
+	}
+
+	third := mustReceiveEventWithin(t, events, 2*time.Second)
+	if third.Type != im.EventTypeMessageCreated {
+		t.Fatalf("third event.Type = %q, want %q", third.Type, im.EventTypeMessageCreated)
+	}
+	if third.Message == nil {
+		t.Fatal("third event.Message = nil, want bootstrap message")
+	}
+	if third.Message.SenderID != "u-admin" {
+		t.Fatalf("third event.Message.SenderID = %q, want %q", third.Message.SenderID, "u-admin")
+	}
+	wantContent := "@Alice Write this down in your memory: your name is Alice. Your responsibility is test lead"
+	if third.Message.Content != wantContent {
+		t.Fatalf("third event.Message.Content = %q, want %q", third.Message.Content, wantContent)
+	}
+	if third.Sender == nil || third.Sender.ID != "u-admin" {
+		t.Fatalf("third event.Sender = %+v, want u-admin", third.Sender)
 	}
 }
 
@@ -385,6 +410,17 @@ func TestHandleAgentsCreateUsesWorkerCompatibilityFlow(t *testing.T) {
 	if first.Type != im.EventTypeUserCreated || second.Type != im.EventTypeRoomCreated {
 		t.Fatalf("events = [%q, %q], want user_created then room_created", first.Type, second.Type)
 	}
+
+	third := mustReceiveEventWithin(t, events, 2*time.Second)
+	if third.Type != im.EventTypeMessageCreated {
+		t.Fatalf("third event.Type = %q, want %q", third.Type, im.EventTypeMessageCreated)
+	}
+	if third.Message == nil {
+		t.Fatal("third event.Message = nil, want bootstrap message")
+	}
+	if third.Message.SenderID != "u-admin" {
+		t.Fatalf("third event.Message.SenderID = %q, want %q", third.Message.SenderID, "u-admin")
+	}
 }
 
 func TestHandleBootstrapAliasReturnsIMBootstrap(t *testing.T) {
@@ -550,6 +586,47 @@ func TestHandleWorkersPostRemainsCreateAlias(t *testing.T) {
 	}
 	if got.ID != "u-bob" || got.Role != agent.RoleWorker {
 		t.Fatalf("agent = %+v, want worker alias result", got)
+	}
+	rooms := srv.im.ListRooms()
+	var workerRoom *im.Room
+	for i := range rooms {
+		if containsParticipant(rooms[i].Participants, "u-bob") {
+			room := rooms[i]
+			workerRoom = &room
+			break
+		}
+	}
+	if workerRoom == nil {
+		t.Fatal("worker room = nil, want bootstrap room for u-bob")
+	}
+	waitForCondition(t, 2*time.Second, 20*time.Millisecond, func() bool {
+		rooms := srv.im.ListRooms()
+		for i := range rooms {
+			if !containsParticipant(rooms[i].Participants, "u-bob") {
+				continue
+			}
+			if len(rooms[i].Messages) < 2 {
+				return false
+			}
+			last := rooms[i].Messages[len(rooms[i].Messages)-1]
+			if last.SenderID != "u-admin" {
+				return false
+			}
+			workerRoom = &rooms[i]
+			return true
+		}
+		return false
+	})
+	if workerRoom == nil || len(workerRoom.Messages) == 0 {
+		t.Fatal("worker room.Messages = empty, want bootstrap messages")
+	}
+	last := workerRoom.Messages[len(workerRoom.Messages)-1]
+	if last.SenderID != "u-admin" {
+		t.Fatalf("last message.SenderID = %q, want %q", last.SenderID, "u-admin")
+	}
+	wantContent := "@bob Write this down in your memory: your name is bob."
+	if last.Content != wantContent {
+		t.Fatalf("last message.Content = %q, want %q", last.Content, wantContent)
 	}
 }
 
@@ -960,4 +1037,29 @@ func mustReceiveEvent(t *testing.T, events <-chan im.Event) im.Event {
 		t.Fatal("expected event")
 		return im.Event{}
 	}
+}
+
+func mustReceiveEventWithin(t *testing.T, events <-chan im.Event, timeout time.Duration) im.Event {
+	t.Helper()
+
+	select {
+	case evt := <-events:
+		return evt
+	case <-time.After(timeout):
+		t.Fatalf("expected event within %s", timeout)
+		return im.Event{}
+	}
+}
+
+func waitForCondition(t *testing.T, timeout, interval time.Duration, fn func() bool) {
+	t.Helper()
+
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if fn() {
+			return
+		}
+		time.Sleep(interval)
+	}
+	t.Fatalf("condition not met within %s", timeout)
 }
