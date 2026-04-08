@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub Release Notes"
+  short_description: "Draft release notes from selected commits"
+  default_prompt: "Use $github-release-notes to draft GitHub release notes from specific commits in this repo."
