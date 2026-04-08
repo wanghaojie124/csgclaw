@@ -15,7 +15,7 @@ GOFMT ?= gofmt
 ONBOARD_BASE_URL ?= http://127.0.0.1:4000
 ONBOARD_API_KEY ?= sk-1234567890
 ONBOARD_MODEL_ID ?= minimax-m2.7
-ONBOARD_MANAGER_IMAGE ?= ghcr.io/russellluo/picoclaw:2026.4.6
+ONBOARD_MANAGER_IMAGE ?= ghcr.io/russellluo/picoclaw:2026.4.8.1
 
 IMAGE ?= ghcr.io/russellluo/picoclaw
 TAG ?= 2025.3.25

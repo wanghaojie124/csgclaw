@@ -28,7 +28,7 @@ csgclaw onboard \
   --base-url http://127.0.0.1:4000 \
   --api-key sk-please-change-me \
   --model-id gpt-4o-mini \
-  --manager-image ghcr.io/russellluo/picoclaw:2026.4.6
+  --manager-image ghcr.io/russellluo/picoclaw:2026.4.8.1
 ```
 
 参数含义：
@@ -221,7 +221,7 @@ api_key = "sk-please-change-me"
 model_id = "gpt-4o-mini"
 
 [bootstrap]
-manager_image = "ghcr.io/russellluo/picoclaw:2026.4.6"
+manager_image = "ghcr.io/russellluo/picoclaw:2026.4.8.1"
 
 [picoclaw]
 access_token = "your-shared-token"
