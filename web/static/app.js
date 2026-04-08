@@ -301,6 +301,7 @@ function App() {
   const [data, setData] = useState(null);
   const [activeConversationId, setActiveConversationId] = useState("");
   const [draft, setDraft] = useState("");
+  const [composerSelectionStart, setComposerSelectionStart] = useState(0);
   const [mentionIndex, setMentionIndex] = useState(0);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
@@ -389,7 +390,7 @@ function App() {
     [activeConversation, usersById],
   );
 
-  const mentionState = useMemo(() => getMentionState(draft, textareaRef.current), [draft]);
+  const mentionState = useMemo(() => getMentionState(draft, composerSelectionStart), [draft, composerSelectionStart]);
   const mentionCandidates = useMemo(() => {
     if (!data || !mentionState) {
       return [];
@@ -404,6 +405,10 @@ function App() {
   useEffect(() => {
     setMentionIndex(0);
   }, [activeConversationId, draft]);
+
+  useEffect(() => {
+    setComposerSelectionStart(0);
+  }, [activeConversationId]);
 
   useEffect(() => {
     if (!showCreateRoom) {
@@ -519,19 +524,24 @@ function App() {
   }
 
   function applyMention(user) {
-    const state = getMentionState(draft, textareaRef.current);
+    const state = getMentionState(draft, composerSelectionStart);
     if (!state) {
       return;
     }
     const next = `${draft.slice(0, state.start)}@${user.handle} ${draft.slice(state.end)}`;
+    const pos = state.start + user.handle.length + 2;
     setDraft(next);
+    setComposerSelectionStart(pos);
     requestAnimationFrame(() => {
       const el = textareaRef.current;
       if (!el) return;
-      const pos = state.start + user.handle.length + 2;
       el.focus();
       el.setSelectionRange(pos, pos);
     });
+  }
+
+  function syncComposerSelection(target) {
+    setComposerSelectionStart(target.selectionStart ?? target.value.length);
   }
 
   function onComposerKeyDown(event) {
@@ -741,8 +751,14 @@ function App() {
                       ref=${textareaRef}
                       value=${draft}
                       placeholder=${t("inputPlaceholder")}
-                      onInput=${(event) => setDraft(event.target.value)}
+                      onInput=${(event) => {
+                        setDraft(event.target.value);
+                        syncComposerSelection(event.target);
+                      }}
+                      onClick=${(event) => syncComposerSelection(event.target)}
                       onKeyDown=${onComposerKeyDown}
+                      onKeyUp=${(event) => syncComposerSelection(event.target)}
+                      onSelect=${(event) => syncComposerSelection(event.target)}
                     />
                     <button className="send-button" disabled=${!draft.trim()} onClick=${sendMessage}>${t("send")}</button>
                   </div>
@@ -926,8 +942,10 @@ function localizeError(raw, t) {
   return cleaned;
 }
 
-function getMentionState(text, textarea) {
-  const cursor = textarea?.selectionStart ?? text.length;
+function getMentionState(text, selection) {
+  const cursor = typeof selection === "number"
+    ? selection
+    : selection?.selectionStart ?? text.length;
   const before = text.slice(0, cursor);
   const match = before.match(/(^|\s)@([a-zA-Z0-9._-]*)$/);
   if (!match) return null;
