@@ -8,6 +8,7 @@ import mermaid from "https://esm.sh/mermaid@11.4.1";
 const html = htm.bind(React.createElement);
 const LOCALE_STORAGE_KEY = "csgclaw.im.locale";
 const TOOL_CALLS_STORAGE_KEY = "csgclaw.im.showToolCalls";
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "csgclaw.im.sidebarCollapsed";
 
 marked.setOptions({
   gfm: true,
@@ -66,6 +67,8 @@ const messages = {
     languageOptionEn: "English",
     toggleToolCallsShow: "显示工具调用",
     toggleToolCallsHide: "隐藏工具调用",
+    collapseSidebar: "收起侧边栏",
+    expandSidebar: "展开侧边栏",
     online: "在线",
     offline: "离线",
     justNow: "刚刚",
@@ -135,6 +138,8 @@ const messages = {
     languageOptionEn: "English",
     toggleToolCallsShow: "Show tool calls",
     toggleToolCallsHide: "Hide tool calls",
+    collapseSidebar: "Collapse sidebar",
+    expandSidebar: "Expand sidebar",
     online: "online",
     offline: "offline",
     justNow: "just now",
@@ -292,10 +297,57 @@ function WrenchIcon() {
   `;
 }
 
+function SidebarToggleIcon() {
+  return html`
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <rect
+        x="3.75"
+        y="5.25"
+        width="16.5"
+        height="13.5"
+        rx="2.25"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.6"
+      />
+      <path d="M8.5 5.75v12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+    </svg>
+  `;
+}
+
+function RoomPlusIcon() {
+  return html`
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="10" fill="#e6ebf3" />
+      <path d="M12 7.5v9M7.5 12h9" fill="none" stroke="#586274" stroke-linecap="round" stroke-width="1.9" />
+    </svg>
+  `;
+}
+
+function RoomsIcon() {
+  return html`
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="10" fill="#e6ebf3" />
+      <path
+        d="M9.25 7.75c-2.35 0-4.25 1.64-4.25 3.67c0 1.01.47 1.93 1.23 2.59L5.5 16.25l2.91-.46c.27.04.55.05.84.05c2.35 0 4.25-1.64 4.25-3.67S11.6 7.75 9.25 7.75Zm5.3 2.92c2.04.21 3.65 1.65 3.65 3.42c0 .88-.4 1.69-1.08 2.29l.58 1.88l-2.35-.43c-.25.03-.52.04-.8.04c-1.75 0-3.25-.78-4-1.95"
+        fill="none"
+        stroke="#1f2937"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="1.7"
+      />
+    </svg>
+  `;
+}
+
 function App() {
   const [locale, setLocale] = useState(() => detectInitialLocale());
   const [showToolCalls, setShowToolCalls] = useState(() => {
     const value = window.localStorage.getItem(TOOL_CALLS_STORAGE_KEY);
+    return value === "true";
+  });
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    const value = window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY);
     return value === "true";
   });
   const [data, setData] = useState(null);
@@ -349,6 +401,10 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(TOOL_CALLS_STORAGE_KEY, String(showToolCalls));
   }, [showToolCalls]);
+
+  useEffect(() => {
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(isSidebarCollapsed));
+  }, [isSidebarCollapsed]);
 
   const t = useMemo(() => createTranslator(locale), [locale]);
 
@@ -579,12 +635,12 @@ function App() {
     : [];
   return html`
     <${React.Fragment}>
-      <div className="app-shell">
-        <aside className="sidebar">
+      <div className=${`app-shell ${isSidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+        <aside className=${`sidebar ${isSidebarCollapsed ? "collapsed" : ""}`}>
           <div className="sidebar-header">
             <div className="sidebar-brand-row">
               <div className="sidebar-brand">CSGClaw</div>
-              <div className="language-switch" role="group" aria-label=${t("languageSwitcher")}>
+              <div className="language-switch sidebar-language-switch" role="group" aria-label=${t("languageSwitcher")}>
                 <span className="language-switch-icon" aria-hidden="true"><${GlobeIcon} /></span>
                 <div className=${`language-switch-track ${locale === "en" ? "is-en" : "is-zh"}`}>
                   <span className="language-switch-thumb" aria-hidden="true"></span>
@@ -606,19 +662,38 @@ function App() {
                   </button>
                 </div>
               </div>
+              <button
+                className="sidebar-toggle-button"
+                aria-label=${t("collapseSidebar")}
+                aria-pressed=${false}
+                title=${t("collapseSidebar")}
+                onClick=${() => setIsSidebarCollapsed(true)}
+              >
+                <span className="sidebar-toggle-mark"><${SidebarToggleIcon} /></span>
+              </button>
             </div>
             <div className="sidebar-header-row">
-              <div className="header-toolbar">
+              <nav className="sidebar-nav" aria-label=${t("conversationSection")}>
                 <button
-                  className="header-create-button"
+                  className="sidebar-nav-button"
                   aria-label=${t("createRoom")}
                   title=${t("createRoom")}
                   onClick=${() => setShowCreateRoom(true)}
                 >
-                  <span className="header-create-button-mark" aria-hidden="true">+</span>
-                  <span className="header-create-button-label">${t("createRoom")}</span>
+                  <span className="sidebar-nav-icon" aria-hidden="true"><${RoomPlusIcon} /></span>
+                  <span className="sidebar-nav-label">${t("createRoom")}</span>
                 </button>
-              </div>
+                <button
+                  className="sidebar-nav-button active"
+                  aria-current="page"
+                  aria-label=${t("conversationSection")}
+                  title=${t("conversationSection")}
+                  onClick=${() => setIsSidebarCollapsed(false)}
+                >
+                  <span className="sidebar-nav-icon" aria-hidden="true"><${RoomsIcon} /></span>
+                  <span className="sidebar-nav-label">${t("conversationSection")}</span>
+                </button>
+              </nav>
             </div>
             <div className="sidebar-stats" aria-label=${t("yourView")}>
               <div className="stat-pill">
@@ -648,6 +723,41 @@ function App() {
             />
           </div>
         </aside>
+
+        ${isSidebarCollapsed
+          ? html`
+              <div className="sidebar-rail">
+                <button
+                  className="sidebar-expand-button"
+                  aria-label=${t("expandSidebar")}
+                  aria-pressed=${true}
+                  title=${t("expandSidebar")}
+                  onClick=${() => setIsSidebarCollapsed(false)}
+                >
+                  <span className="sidebar-toggle-mark"><${SidebarToggleIcon} /></span>
+                </button>
+                <nav className="sidebar-rail-nav" aria-label=${t("conversationSection")}>
+                  <button
+                    className="sidebar-rail-button"
+                    aria-label=${t("createRoom")}
+                    title=${t("createRoom")}
+                    onClick=${() => setShowCreateRoom(true)}
+                  >
+                    <span className="sidebar-rail-icon" aria-hidden="true"><${RoomPlusIcon} /></span>
+                  </button>
+                  <button
+                    className="sidebar-rail-button active"
+                    aria-current="page"
+                    aria-label=${t("conversationSection")}
+                    title=${t("conversationSection")}
+                    onClick=${() => setIsSidebarCollapsed(false)}
+                  >
+                    <span className="sidebar-rail-icon" aria-hidden="true"><${RoomsIcon} /></span>
+                  </button>
+                </nav>
+              </div>
+            `
+          : null}
 
         <main className="chat-panel">
           ${activeConversation
@@ -864,7 +974,6 @@ function ConversationSection({ title, items, activeConversationId, currentUserID
 
   return html`
     <section className="conversation-section">
-      <div className="conversation-section-title">${title}</div>
       ${items.map((conversation) => {
         const lastMessage = conversation.messages[conversation.messages.length - 1];
         const displayUser = resolveConversationUser(conversation, currentUserID, usersById);
