@@ -25,12 +25,20 @@ type User struct {
 }
 
 type Message struct {
-	ID        string    `json:"id"`
-	SenderID  string    `json:"sender_id"`
-	Kind      string    `json:"kind,omitempty"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
-	Mentions  []string  `json:"mentions"`
+	ID        string        `json:"id"`
+	SenderID  string        `json:"sender_id"`
+	Kind      string        `json:"kind,omitempty"`
+	Content   string        `json:"content"`
+	Event     *EventPayload `json:"event,omitempty"`
+	CreatedAt time.Time     `json:"created_at"`
+	Mentions  []string      `json:"mentions"`
+}
+
+type EventPayload struct {
+	Key       string   `json:"key"`
+	ActorID   string   `json:"actor_id,omitempty"`
+	Title     string   `json:"title,omitempty"`
+	TargetIDs []string `json:"target_ids,omitempty"`
 }
 
 type Room struct {
@@ -658,10 +666,14 @@ func (s *Service) CreateRoom(req CreateRoomRequest) (Room, error) {
 		Participants: participants,
 		Messages: []Message{
 			{
-				ID:        fmt.Sprintf("msg-%d", time.Now().UnixNano()),
-				SenderID:  req.CreatorID,
-				Kind:      MessageKindEvent,
-				Content:   s.localizeSystemText(req.Locale, "room_created", req.CreatorID, title, nil),
+				ID:       fmt.Sprintf("msg-%d", time.Now().UnixNano()),
+				SenderID: req.CreatorID,
+				Kind:     MessageKindEvent,
+				Event: &EventPayload{
+					Key:     "room_created",
+					ActorID: req.CreatorID,
+					Title:   title,
+				},
 				CreatedAt: time.Now().UTC(),
 			},
 		},
@@ -731,10 +743,14 @@ func (s *Service) AddRoomMembers(req AddRoomMembersRequest) (Room, error) {
 
 	room.Subtitle = formatRoomSubtitle(len(room.Participants))
 	room.Messages = append(room.Messages, Message{
-		ID:        fmt.Sprintf("msg-%d", time.Now().UnixNano()),
-		SenderID:  req.InviterID,
-		Kind:      MessageKindEvent,
-		Content:   s.localizeSystemText(req.Locale, "room_members_added", req.InviterID, "", addedIDs),
+		ID:       fmt.Sprintf("msg-%d", time.Now().UnixNano()),
+		SenderID: req.InviterID,
+		Kind:     MessageKindEvent,
+		Event: &EventPayload{
+			Key:       "room_members_added",
+			ActorID:   req.InviterID,
+			TargetIDs: append([]string(nil), addedIDs...),
+		},
 		CreatedAt: time.Now().UTC(),
 		Mentions:  append([]string(nil), addedIDs...),
 	})

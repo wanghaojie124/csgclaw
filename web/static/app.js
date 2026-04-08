@@ -692,7 +692,7 @@ function App() {
                     if (isEventMessage(message)) {
                       return html`
                         <div key=${message.id} className="message-event-row">
-                          <div className="message-event-text">${message.content}</div>
+                          <div className="message-event-text">${formatEventMessage(message, usersById, locale)}</div>
                         </div>
                       `;
                     }
@@ -871,7 +871,7 @@ function ConversationSection({ title, items, activeConversationId, currentUserID
                 <div className="section-label">${formatTime(lastMessage?.created_at, locale)}</div>
               </div>
               <div className="conversation-preview truncate">
-                ${lastMessage?.content ?? getConversationSubtitle(conversation, currentUserID, usersById, locale, t)}
+                ${formatConversationPreview(lastMessage, conversation, currentUserID, usersById, locale, t)}
               </div>
             </div>
           </button>
@@ -949,6 +949,37 @@ function isEventMessage(message) {
   return isLegacySystemEventContent(message?.content);
 }
 
+function formatConversationPreview(message, conversation, currentUserID, usersById, locale, t) {
+  if (message) {
+    if (isEventMessage(message)) {
+      return formatEventMessage(message, usersById, locale);
+    }
+    return message.content;
+  }
+  return getConversationSubtitle(conversation, currentUserID, usersById, locale, t);
+}
+
+function formatEventMessage(message, usersById, locale) {
+  if (!message) {
+    return "";
+  }
+  if (message.event?.key === "room_created") {
+    const actor = userDisplayName(message.event.actor_id || message.sender_id, usersById);
+    const title = message.event.title || message.content || "";
+    return locale === "zh" ? `${actor} 创建了房间“${title}”` : `${actor} created the room "${title}"`;
+  }
+  if (message.event?.key === "room_members_added") {
+    const actor = userDisplayName(message.event.actor_id || message.sender_id, usersById);
+    const targets = (message.event.target_ids || message.mentions || []).map((id) => userDisplayName(id, usersById)).filter(Boolean);
+    if (targets.length > 0) {
+      return locale === "zh"
+        ? `${actor} 邀请 ${targets.join("、")} 加入了房间`
+        : `${actor} invited ${targets.join(", ")} to join the room`;
+    }
+  }
+  return message.content || "";
+}
+
 function isLegacySystemEventContent(content) {
   const text = (content ?? "").trim();
   if (!text) {
@@ -960,6 +991,17 @@ function isLegacySystemEventContent(content) {
     /^.+ 邀请 .+ 加入了房间。?$/,
     /^.+ 创建了房间“.+”。?$/,
   ].some((pattern) => pattern.test(text));
+}
+
+function userDisplayName(userID, usersById) {
+  if (!userID) {
+    return "";
+  }
+  const user = usersById.get(userID);
+  if (!user) {
+    return userID;
+  }
+  return user.name || (user.handle ? `@${user.handle}` : userID);
 }
 
 function resolveConversationUser(conversation, currentUserID, usersById) {

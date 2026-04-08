@@ -82,6 +82,40 @@ func TestAddAgentToRoomSupportsRoomID(t *testing.T) {
 	if !containsUserIDInRoom(updated, "u-alice") {
 		t.Fatalf("AddAgentToRoom() participants = %+v, want agent joined", updated.Participants)
 	}
+	last := updated.Messages[len(updated.Messages)-1]
+	if last.Event == nil || last.Event.Key != "room_members_added" || last.Event.ActorID != "u-admin" {
+		t.Fatalf("AddAgentToRoom() event = %+v, want structured room_members_added by u-admin", last)
+	}
+	if len(last.Event.TargetIDs) != 1 || last.Event.TargetIDs[0] != "u-alice" {
+		t.Fatalf("AddAgentToRoom() target_ids = %+v, want [u-alice]", last.Event.TargetIDs)
+	}
+	if last.Content != "" {
+		t.Fatalf("AddAgentToRoom() content = %q, want empty structured event content", last.Content)
+	}
+}
+
+func TestCreateRoomStoresStructuredEvent(t *testing.T) {
+	svc := NewService()
+
+	room, err := svc.CreateRoom(CreateRoomRequest{
+		Title:          "Ops",
+		CreatorID:      "u-admin",
+		ParticipantIDs: []string{"u-manager"},
+		Locale:         "en",
+	})
+	if err != nil {
+		t.Fatalf("CreateRoom() error = %v", err)
+	}
+	if len(room.Messages) != 1 {
+		t.Fatalf("CreateRoom() messages = %d, want 1", len(room.Messages))
+	}
+	got := room.Messages[0]
+	if got.Kind != MessageKindEvent || got.Event == nil || got.Event.Key != "room_created" || got.Event.ActorID != "u-admin" || got.Event.Title != "Ops" {
+		t.Fatalf("CreateRoom() event = %+v, want structured room_created event", got)
+	}
+	if got.Content != "" {
+		t.Fatalf("CreateRoom() content = %q, want empty structured event content", got.Content)
+	}
 }
 
 func TestListRoomsUsersAndMessages(t *testing.T) {
@@ -89,7 +123,7 @@ func TestListRoomsUsersAndMessages(t *testing.T) {
 	later := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
 	svc := NewServiceFromBootstrap(Bootstrap{
 		CurrentUserID: "u-admin",
-	Users: []User{
+		Users: []User{
 			{ID: "u-zed", Name: "Zed", Handle: "zed", Role: "Worker"},
 			{ID: "u-alice", Name: "Alice", Handle: "alice", Role: "Worker"},
 		},
