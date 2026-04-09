@@ -13,12 +13,12 @@ type Config struct {
 	Server    ServerConfig
 	LLM       LLMConfig
 	Bootstrap BootstrapConfig
-	PicoClaw  PicoClawConfig
 }
 
 type ServerConfig struct {
 	ListenAddr       string
 	AdvertiseBaseURL string
+	AccessToken      string
 }
 
 type LLMConfig struct {
@@ -31,10 +31,6 @@ type BootstrapConfig struct {
 	ManagerImage string
 }
 
-type PicoClawConfig struct {
-	AccessToken string
-}
-
 const (
 	AppDirName         = ".csgclaw"
 	RuntimeHomeDirName = "boxlite"
@@ -43,12 +39,12 @@ const (
 	AgentsDirName      = "agents"
 	IMDirName          = "im"
 
-	DefaultListenAddr          = "0.0.0.0:18080"
-	DefaultLLMBaseURL          = "http://127.0.0.1:4000"
-	DefaultLLMAPIKey           = "sk-1234567890"
-	DefaultLLMModelID          = "minimax-m2.7"
-	DefaultPicoClawAccessToken = "your_access_token"
-	DefaultManagerImage        = "ghcr.io/russellluo/picoclaw:2026.4.8.1"
+	DefaultListenAddr   = "0.0.0.0:18080"
+	DefaultLLMBaseURL   = "http://127.0.0.1:4000"
+	DefaultLLMAPIKey    = "sk-1234567890"
+	DefaultLLMModelID   = "minimax-m2.7"
+	DefaultAccessToken  = "your_access_token"
+	DefaultManagerImage = "ghcr.io/russellluo/picoclaw:2026.4.8.1"
 )
 
 func DefaultDir() (string, error) {
@@ -143,6 +139,8 @@ func Load(path string) (Config, error) {
 				cfg.Server.ListenAddr = value
 			case "advertise_base_url":
 				cfg.Server.AdvertiseBaseURL = strings.TrimRight(value, "/")
+			case "access_token":
+				cfg.Server.AccessToken = value
 			}
 		case "llm":
 			switch key {
@@ -158,13 +156,6 @@ func Load(path string) (Config, error) {
 			case "manager_image":
 				cfg.Bootstrap.ManagerImage = value
 			}
-		case "picoclaw":
-			switch key {
-			case "access_token":
-				cfg.PicoClaw.AccessToken = value
-			case "send_token":
-				cfg.PicoClaw.AccessToken = value
-			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -177,8 +168,8 @@ func Load(path string) (Config, error) {
 	if cfg.Bootstrap.ManagerImage == "" {
 		cfg.Bootstrap.ManagerImage = DefaultManagerImage
 	}
-	if cfg.PicoClaw.AccessToken == "" {
-		cfg.PicoClaw.AccessToken = DefaultPicoClawAccessToken
+	if cfg.Server.AccessToken == "" {
+		cfg.Server.AccessToken = DefaultAccessToken
 	}
 	return cfg, nil
 }
@@ -193,6 +184,7 @@ func (c Config) Save(path string) error {
 [server]
 listen_addr = %q
 advertise_base_url = %q
+access_token = %q
 
 [llm]
 base_url = %q
@@ -201,10 +193,7 @@ model_id = %q
 
 [bootstrap]
 manager_image = %q
-
-[picoclaw]
-access_token = %q
-`, c.Server.ListenAddr, c.Server.AdvertiseBaseURL, c.LLM.BaseURL, c.LLM.APIKey, c.LLM.ModelID, c.Bootstrap.ManagerImage, c.PicoClaw.AccessToken)
+`, c.Server.ListenAddr, c.Server.AdvertiseBaseURL, c.Server.AccessToken, c.LLM.BaseURL, c.LLM.APIKey, c.LLM.ModelID, c.Bootstrap.ManagerImage)
 
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		return fmt.Errorf("write config: %w", err)

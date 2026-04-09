@@ -22,19 +22,15 @@ func (a *App) runOnboard(args []string, globals GlobalOptions) error {
 
 	cfg := config.Config{
 		Server: config.ServerConfig{
-			ListenAddr: config.DefaultListenAddr,
+			ListenAddr:  config.DefaultListenAddr,
+			AccessToken: config.DefaultAccessToken,
 		},
 		LLM: config.LLMConfig{
 			BaseURL: *baseURL,
 			APIKey:  *apiKey,
 			ModelID: *modelID,
 		},
-		Bootstrap: config.BootstrapConfig{
-			ManagerImage: *managerImage,
-		},
-		PicoClaw: config.PicoClawConfig{
-			AccessToken: config.DefaultPicoClawAccessToken,
-		},
+		Bootstrap: config.BootstrapConfig{ManagerImage: *managerImage},
 	}
 
 	path, err := configPath(globals.Config)
@@ -49,7 +45,7 @@ func (a *App) runOnboard(args []string, globals GlobalOptions) error {
 	if err != nil {
 		return err
 	}
-	if err := agent.EnsureBootstrapState(context.Background(), agentsPath, cfg.Server, cfg.LLM, cfg.PicoClaw, cfg.Bootstrap.ManagerImage, *forceRecreateManager); err != nil {
+	if err := agent.EnsureBootstrapState(context.Background(), agentsPath, cfg.Server, cfg.LLM, cfg.Bootstrap.ManagerImage, *forceRecreateManager); err != nil {
 		return err
 	}
 

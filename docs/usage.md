@@ -37,7 +37,7 @@ csgclaw onboard \
 - `listen_addr` 使用内置默认值
 - `advertise_base_url` 是可选扩展配置，本地使用通常不需要设置
 - `manager_image` 会写入 `~/.csgclaw/config.toml`，后续可按需修改
-- PicoClaw 相关的 `access_token` 需要在初始化后手动修改 `~/.csgclaw/config.toml`
+- 访问 server 用的共享 `access_token` 需要在初始化后手动修改 `~/.csgclaw/config.toml` 的 `[server]` 版块
 
 初始化完成后启动服务：
 
@@ -215,6 +215,7 @@ curl -X POST \
 [server]
 listen_addr = "0.0.0.0:18080"
 advertise_base_url = ""
+access_token = "your-shared-token"
 
 [llm]
 base_url = "http://127.0.0.1:4000"
@@ -223,9 +224,6 @@ model_id = "gpt-4o-mini"
 
 [bootstrap]
 manager_image = "ghcr.io/russellluo/picoclaw:2026.4.8.1"
-
-[picoclaw]
-access_token = "your-shared-token"
 ```
 
 ## 6. 联调建议

@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -68,7 +69,43 @@ model_id = "minimax-m2.7"
 	if got, want := cfg.Bootstrap.ManagerImage, DefaultManagerImage; got != want {
 		t.Fatalf("cfg.Bootstrap.ManagerImage = %q, want %q", got, want)
 	}
-	if got, want := cfg.PicoClaw.AccessToken, DefaultPicoClawAccessToken; got != want {
-		t.Fatalf("cfg.PicoClaw.AccessToken = %q, want %q", got, want)
+	if got, want := cfg.Server.AccessToken, DefaultAccessToken; got != want {
+		t.Fatalf("cfg.Server.AccessToken = %q, want %q", got, want)
+	}
+}
+
+func TestSaveWritesAccessTokenUnderServerSection(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	cfg := Config{
+		Server: ServerConfig{
+			ListenAddr:       "127.0.0.1:18080",
+			AdvertiseBaseURL: "http://127.0.0.1:18080",
+			AccessToken:      "shared-token",
+		},
+		LLM: LLMConfig{
+			BaseURL: "http://127.0.0.1:4000",
+			APIKey:  "sk",
+			ModelID: "minimax-m2.7",
+		},
+		Bootstrap: BootstrapConfig{
+			ManagerImage: "img",
+		},
+	}
+
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "access_token = \"shared-token\"") {
+		t.Fatalf("saved config missing server access token:\n%s", content)
+	}
+	if strings.Contains(content, "[picoclaw]") {
+		t.Fatalf("saved config should not contain [picoclaw] section:\n%s", content)
 	}
 }

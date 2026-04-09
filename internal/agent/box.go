@@ -53,7 +53,7 @@ func (s *Service) gatewayBoxOptions(name, botID, modelID string) ([]boxlite.BoxO
 	if strings.TrimSpace(modelID) == "" {
 		modelID = s.llm.ModelID
 	}
-	envVars := picoclawBoxEnvVars(resolveManagerBaseURL(s.server), s.pico.AccessToken, botID, s.llm)
+	envVars := picoclawBoxEnvVars(resolveManagerBaseURL(s.server), s.server.AccessToken, botID, s.llm)
 	opts := []boxlite.BoxOption{
 		boxlite.WithName(name),
 		boxlite.WithDetach(true),
@@ -78,7 +78,7 @@ func (s *Service) gatewayBoxOptions(name, botID, modelID string) ([]boxlite.BoxO
 		//boxlite.WithCmd("sleep", "infinity"),
 	)
 
-	//hostPicoClawRoot, err := ensureAgentPicoClawConfig(name, botID, s.server, s.llm, s.pico)
+	//hostPicoClawRoot, err := ensureAgentPicoClawConfig(name, botID, s.server, s.llm)
 	//if err != nil {
 	//	return nil, err
 	//}

@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-
-	"csgclaw/internal/config"
 )
 
 type PicoClawBridge struct {
-	cfg         config.PicoClawConfig
+	accessToken string
 	mu          sync.Mutex
 	subscribers map[string]map[chan PicoClawEvent]struct{}
 }
@@ -36,18 +34,18 @@ type PicoClawSendMessageRequest struct {
 	Text   string `json:"text"`
 }
 
-func NewPicoClawBridge(cfg config.PicoClawConfig) *PicoClawBridge {
+func NewPicoClawBridge(accessToken string) *PicoClawBridge {
 	return &PicoClawBridge{
-		cfg:         cfg,
+		accessToken: accessToken,
 		subscribers: make(map[string]map[chan PicoClawEvent]struct{}),
 	}
 }
 
 func (b *PicoClawBridge) ValidateAccessToken(authHeader string) bool {
-	if strings.TrimSpace(b.cfg.AccessToken) == "" {
+	if strings.TrimSpace(b.accessToken) == "" {
 		return true
 	}
-	return authHeader == "Bearer "+b.cfg.AccessToken
+	return authHeader == "Bearer "+b.accessToken
 }
 
 func (b *PicoClawBridge) Subscribe(botID string) (<-chan PicoClawEvent, func()) {

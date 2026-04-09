@@ -104,7 +104,7 @@ func (a *App) runInternalServe(ctx context.Context, args []string, globals Globa
 		Service:    svc,
 		IM:         imSvc,
 		IMBus:      imBus,
-		PicoClaw:   im.NewPicoClawBridge(cfg.PicoClaw),
+		PicoClaw:   im.NewPicoClawBridge(cfg.Server.AccessToken),
 		Context:    ctx,
 	})
 }
@@ -130,7 +130,7 @@ func (a *App) serveForeground(ctx context.Context, cfg config.Config) error {
 		Service:    svc,
 		IM:         imSvc,
 		IMBus:      imBus,
-		PicoClaw:   im.NewPicoClawBridge(cfg.PicoClaw),
+		PicoClaw:   im.NewPicoClawBridge(cfg.Server.AccessToken),
 		Context:    ctx,
 	})
 }
@@ -339,7 +339,7 @@ func newAgentService(cfg config.Config) (*agent.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	return agent.NewService(cfg.LLM, cfg.Server, cfg.PicoClaw, cfg.Bootstrap.ManagerImage, agentsPath)
+	return agent.NewService(cfg.LLM, cfg.Server, cfg.Bootstrap.ManagerImage, agentsPath)
 }
 
 func newIMService() (*im.Service, error) {

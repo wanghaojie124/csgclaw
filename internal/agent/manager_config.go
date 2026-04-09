@@ -20,11 +20,11 @@ var defaultManagerPicoClawConfig []byte
 //go:embed defaults/manager-security.yml
 var defaultManagerSecurityConfig string
 
-func ensureManagerPicoClawConfig(server config.ServerConfig, llm config.LLMConfig, pico config.PicoClawConfig) (string, error) {
-	return ensureAgentPicoClawConfig(ManagerName, "u-manager", server, llm, pico)
+func ensureManagerPicoClawConfig(server config.ServerConfig, llm config.LLMConfig) (string, error) {
+	return ensureAgentPicoClawConfig(ManagerName, "u-manager", server, llm)
 }
 
-func ensureAgentPicoClawConfig(agentName, botID string, server config.ServerConfig, llm config.LLMConfig, pico config.PicoClawConfig) (string, error) {
+func ensureAgentPicoClawConfig(agentName, botID string, server config.ServerConfig, llm config.LLMConfig) (string, error) {
 	hostRoot, err := agentPicoClawRoot(agentName)
 	if err != nil {
 		return "", err
@@ -33,7 +33,7 @@ func ensureAgentPicoClawConfig(agentName, botID string, server config.ServerConf
 		return "", fmt.Errorf("create manager picoclaw logs dir: %w", err)
 	}
 
-	data, err := renderAgentPicoClawConfig(botID, server, llm, pico)
+	data, err := renderAgentPicoClawConfig(botID, server, llm)
 	if err != nil {
 		return "", err
 	}
@@ -61,11 +61,11 @@ func agentPicoClawRoot(agentName string) (string, error) {
 	return filepath.Join(homeDir, config.AppDirName, managerAgentsDirName, agentName, hostPicoClawDir), nil
 }
 
-func renderManagerPicoClawConfig(server config.ServerConfig, llm config.LLMConfig, pico config.PicoClawConfig) ([]byte, error) {
-	return renderAgentPicoClawConfig("u-manager", server, llm, pico)
+func renderManagerPicoClawConfig(server config.ServerConfig, llm config.LLMConfig) ([]byte, error) {
+	return renderAgentPicoClawConfig("u-manager", server, llm)
 }
 
-func renderAgentPicoClawConfig(botID string, server config.ServerConfig, llm config.LLMConfig, pico config.PicoClawConfig) ([]byte, error) {
+func renderAgentPicoClawConfig(botID string, server config.ServerConfig, llm config.LLMConfig) ([]byte, error) {
 	var cfg map[string]any
 	if err := json.Unmarshal(defaultManagerPicoClawConfig, &cfg); err != nil {
 		return nil, fmt.Errorf("decode embedded manager picoclaw config: %w", err)
@@ -74,7 +74,7 @@ func renderAgentPicoClawConfig(botID string, server config.ServerConfig, llm con
 	if err := updateModelList(cfg, llm); err != nil {
 		return nil, err
 	}
-	if err := updateCSGClawChannel(cfg, botID, server, pico); err != nil {
+	if err := updateCSGClawChannel(cfg, botID, server); err != nil {
 		return nil, err
 	}
 
@@ -107,7 +107,7 @@ func updateModelList(cfg map[string]any, llm config.LLMConfig) error {
 	return nil
 }
 
-func updateCSGClawChannel(cfg map[string]any, botID string, server config.ServerConfig, pico config.PicoClawConfig) error {
+func updateCSGClawChannel(cfg map[string]any, botID string, server config.ServerConfig) error {
 	channels, ok := cfg["channels"].(map[string]any)
 	if !ok {
 		return fmt.Errorf("embedded manager picoclaw config is missing channels")
@@ -119,8 +119,8 @@ func updateCSGClawChannel(cfg map[string]any, botID string, server config.Server
 	if baseURL := resolveManagerBaseURL(server); baseURL != "" {
 		channel["base_url"] = baseURL
 	}
-	if pico.AccessToken != "" {
-		channel["access_token"] = pico.AccessToken
+	if server.AccessToken != "" {
+		channel["access_token"] = server.AccessToken
 	}
 	channel["bot_id"] = botID
 	channel["enabled"] = true

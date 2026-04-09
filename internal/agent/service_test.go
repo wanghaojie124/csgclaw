@@ -17,7 +17,7 @@ import (
 )
 
 func TestCreateWorkerRejectsReservedManagerName(t *testing.T) {
-	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", "")
+	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, "", "")
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -35,7 +35,7 @@ func TestCreateWorkerRejectsReservedManagerName(t *testing.T) {
 }
 
 func TestCreateWorkerRejectsDuplicateName(t *testing.T) {
-	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", "")
+	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, "", "")
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -67,7 +67,7 @@ func TestCreateWorkerRejectsInvalidRuntime(t *testing.T) {
 	)
 	defer ResetTestHooks()
 
-	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", "")
+	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, "", "")
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -92,7 +92,7 @@ func TestRuntimeValidRejectsNilAndZeroValue(t *testing.T) {
 }
 
 func TestListWorkersFiltersUnifiedAgents(t *testing.T) {
-	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", "")
+	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, "", "")
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -127,7 +127,7 @@ func TestLoadMigratesLegacyWorkersIntoAgents(t *testing.T) {
 		t.Fatalf("os.WriteFile() error = %v", err)
 	}
 
-	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", statePath)
+	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, "", statePath)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -142,7 +142,7 @@ func TestLoadMigratesLegacyWorkersIntoAgents(t *testing.T) {
 }
 
 func TestDeleteRejectsManagerAgent(t *testing.T) {
-	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", "")
+	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, "", "")
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -172,7 +172,7 @@ func TestDeleteRemovesAgentFromState(t *testing.T) {
 
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "agents.json")
-	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", statePath)
+	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, "", statePath)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -195,7 +195,7 @@ func TestDeleteRemovesAgentFromState(t *testing.T) {
 		t.Fatal("Agent() ok = true, want false after delete")
 	}
 
-	reloaded, err := NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", statePath)
+	reloaded, err := NewService(config.LLMConfig{}, config.ServerConfig{}, "", statePath)
 	if err != nil {
 		t.Fatalf("NewService() reload error = %v", err)
 	}
@@ -214,7 +214,7 @@ func TestDeleteRemovesAgentHomeDirectory(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 
-	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", "")
+	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, "", "")
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -271,7 +271,7 @@ func TestDeletePrefersBoxIDOverName(t *testing.T) {
 		testForceRemoveBoxHook = nil
 	}()
 
-	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", "")
+	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, "", "")
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -320,7 +320,7 @@ func TestDeleteFallsBackToNameWhenStoredBoxIDIsStale(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 
-	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", "")
+	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, "", "")
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -377,7 +377,7 @@ func TestDeleteRemovesRuntimeCacheByHomeDir(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 
-	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", "")
+	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, "", "")
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -421,7 +421,7 @@ func TestCreateWorkerStoresBoxID(t *testing.T) {
 	)
 	defer ResetTestHooks()
 
-	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", "")
+	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, "", "")
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -465,7 +465,7 @@ func TestCreateWorkerClosesBoxHandleAfterCreate(t *testing.T) {
 		return nil
 	}
 
-	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", "")
+	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, "", "")
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -508,7 +508,7 @@ func TestStreamLogsUsesStoredBoxIDAndTailArgs(t *testing.T) {
 		testRunBoxCommandHook = nil
 	}()
 
-	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", "")
+	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, "", "")
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -567,7 +567,7 @@ func TestStreamLogsFallsBackToNameAndRefreshesStoredBoxID(t *testing.T) {
 
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "agents.json")
-	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", statePath)
+	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, "", statePath)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -624,7 +624,6 @@ func TestCreateClosesBoxHandleAfterCreate(t *testing.T) {
 	svc, err := NewService(
 		config.LLMConfig{BaseURL: "http://127.0.0.1:4000", APIKey: "sk-test", ModelID: "model-1"},
 		config.ServerConfig{},
-		config.PicoClawConfig{},
 		"",
 		"",
 	)
@@ -700,14 +699,14 @@ func TestEnsureBootstrapStateForceRecreatePrefersStoredManagerBoxID(t *testing.T
 		t.Fatalf("os.WriteFile() error = %v", err)
 	}
 
-	if err := EnsureBootstrapState(context.Background(), statePath, config.ServerConfig{}, config.LLMConfig{}, config.PicoClawConfig{}, "", true); err != nil {
+	if err := EnsureBootstrapState(context.Background(), statePath, config.ServerConfig{}, config.LLMConfig{}, "", true); err != nil {
 		t.Fatalf("EnsureBootstrapState() error = %v", err)
 	}
 	if removed != "box-old" {
 		t.Fatalf("ForceRemove() target = %q, want %q", removed, "box-old")
 	}
 
-	reloaded, err := NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", statePath)
+	reloaded, err := NewService(config.LLMConfig{}, config.ServerConfig{}, "", statePath)
 	if err != nil {
 		t.Fatalf("NewService() reload error = %v", err)
 	}
@@ -756,7 +755,7 @@ func TestEnsureBootstrapStateClosesManagerBoxHandleAfterCreate(t *testing.T) {
 
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "agents.json")
-	if err := EnsureBootstrapState(context.Background(), statePath, config.ServerConfig{}, config.LLMConfig{}, config.PicoClawConfig{}, "", false); err != nil {
+	if err := EnsureBootstrapState(context.Background(), statePath, config.ServerConfig{}, config.LLMConfig{}, "", false); err != nil {
 		t.Fatalf("EnsureBootstrapState() error = %v", err)
 	}
 	if closeCalls != 1 {
@@ -766,7 +765,7 @@ func TestEnsureBootstrapStateClosesManagerBoxHandleAfterCreate(t *testing.T) {
 		t.Fatalf("closeRuntime() calls = %d, want %d", closeRuntimeCalls, 1)
 	}
 
-	reloaded, err := NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", statePath)
+	reloaded, err := NewService(config.LLMConfig{}, config.ServerConfig{}, "", statePath)
 	if err != nil {
 		t.Fatalf("NewService() reload error = %v", err)
 	}
@@ -834,7 +833,7 @@ func TestEnsureBootstrapStateReusesStoredManagerBoxIDWithoutForce(t *testing.T) 
 		t.Fatalf("os.WriteFile() error = %v", err)
 	}
 
-	if err := EnsureBootstrapState(context.Background(), statePath, config.ServerConfig{}, config.LLMConfig{}, config.PicoClawConfig{}, "", false); err != nil {
+	if err := EnsureBootstrapState(context.Background(), statePath, config.ServerConfig{}, config.LLMConfig{}, "", false); err != nil {
 		t.Fatalf("EnsureBootstrapState() error = %v", err)
 	}
 	if created {
@@ -873,7 +872,7 @@ func TestLookupBootstrapManagerUsesPerAgentHome(t *testing.T) {
 		testGetBoxHook = nil
 	}()
 
-	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", "")
+	svc, err := NewService(config.LLMConfig{}, config.ServerConfig{}, "", "")
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}

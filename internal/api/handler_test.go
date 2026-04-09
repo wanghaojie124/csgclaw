@@ -945,7 +945,7 @@ func TestHandleRoomsDeleteRemovesRoom(t *testing.T) {
 func TestHandlePicoClawRoutesRequireAuthorization(t *testing.T) {
 	srv := &Handler{
 		im:       im.NewService(),
-		picoclaw: im.NewPicoClawBridge(config.PicoClawConfig{AccessToken: "secret"}),
+		picoclaw: im.NewPicoClawBridge("secret"),
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/bots/u-manager/messages/send", strings.NewReader(`{"room_id":"room-1","text":"hello"}`))
@@ -959,7 +959,7 @@ func TestHandlePicoClawRoutesRequireAuthorization(t *testing.T) {
 
 func TestHandlePicoClawSendMessageRequiresIMService(t *testing.T) {
 	srv := &Handler{
-		picoclaw: im.NewPicoClawBridge(config.PicoClawConfig{}),
+		picoclaw: im.NewPicoClawBridge(""),
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/bots/u-manager/messages/send", strings.NewReader(`{"room_id":"room-1","text":"hello"}`))
@@ -974,7 +974,7 @@ func TestHandlePicoClawSendMessageRequiresIMService(t *testing.T) {
 func mustNewService(t *testing.T) *agent.Service {
 	t.Helper()
 
-	svc, err := agent.NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", "")
+	svc, err := agent.NewService(config.LLMConfig{}, config.ServerConfig{}, "", "")
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -1001,7 +1001,7 @@ func mustNewSeededServiceWithPath(t *testing.T, agents []agent.Agent) (*agent.Se
 		t.Fatalf("writeSeededAgents() error = %v", err)
 	}
 
-	svc, err := agent.NewService(config.LLMConfig{}, config.ServerConfig{}, config.PicoClawConfig{}, "", statePath)
+	svc, err := agent.NewService(config.LLMConfig{}, config.ServerConfig{}, "", statePath)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}

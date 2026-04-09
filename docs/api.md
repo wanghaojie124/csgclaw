@@ -335,7 +335,7 @@ Kick 指定用户。
 认证要求：
 
 - 请求头必须带 `Authorization: Bearer <token>`
-- token 来自 `~/.csgclaw/config.toml` 中的 `[picoclaw].access_token`
+- token 来自 `~/.csgclaw/config.toml` 中的 `[server].access_token`
 - 若服务端配置为空，则不校验；默认初始化值为 `your_access_token`
 
 ### `GET /api/bots/{bot_id}/events`

@@ -89,7 +89,6 @@ func TestOnlySetRunBoxCommandHook(hook func(*Service, context.Context, *boxlite.
 type Service struct {
 	llm          config.LLMConfig
 	server       config.ServerConfig
-	pico         config.PicoClawConfig
 	managerImage string
 	state        string
 	mu           sync.RWMutex
@@ -97,14 +96,13 @@ type Service struct {
 	agents       map[string]Agent
 }
 
-func NewService(llm config.LLMConfig, server config.ServerConfig, pico config.PicoClawConfig, managerImage, statePath string) (*Service, error) {
+func NewService(llm config.LLMConfig, server config.ServerConfig, managerImage, statePath string) (*Service, error) {
 	if managerImage == "" {
 		managerImage = config.DefaultManagerImage
 	}
 	svc := &Service{
 		llm:          llm,
 		server:       server,
-		pico:         pico,
 		managerImage: managerImage,
 		state:        statePath,
 		runtimes:     make(map[string]*boxlite.Runtime),
@@ -116,8 +114,8 @@ func NewService(llm config.LLMConfig, server config.ServerConfig, pico config.Pi
 	return svc, nil
 }
 
-func EnsureBootstrapState(ctx context.Context, statePath string, server config.ServerConfig, llm config.LLMConfig, pico config.PicoClawConfig, managerImage string, forceRecreate bool) error {
-	svc, err := NewService(llm, server, pico, managerImage, statePath)
+func EnsureBootstrapState(ctx context.Context, statePath string, server config.ServerConfig, llm config.LLMConfig, managerImage string, forceRecreate bool) error {
+	svc, err := NewService(llm, server, managerImage, statePath)
 	if err != nil {
 		return err
 	}

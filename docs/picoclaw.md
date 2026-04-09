@@ -41,7 +41,7 @@ PicoClaw 的 `myim channel` 至少需要这几个配置：
 - `access_token`
   - 访问 IM SSE 和发送接口时使用的 Bearer Token
 
-这个 `access_token` 来自 IM 侧配置文件 `~/.csgclaw/config.toml` 的 `[picoclaw].access_token`。
+这个 `access_token` 来自 IM 侧配置文件 `~/.csgclaw/config.toml` 的 `[server].access_token`。
 
 拼接后的两个关键地址：
 
