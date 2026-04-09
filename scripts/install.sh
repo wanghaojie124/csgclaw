@@ -123,7 +123,7 @@ Installed ${APP} ${version} to ${INSTALL_DIR}/${APP}
 
 Next steps:
   ${APP} onboard --base-url <url> --api-key <key> --model-id <model>
-  ${APP} start
+  ${APP} serve
 EOF
   check_path_hint
 }

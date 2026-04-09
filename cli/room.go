@@ -11,7 +11,7 @@ import (
 
 func (a *App) runRoom(ctx context.Context, args []string, globals GlobalOptions) error {
 	if len(args) == 0 {
-		a.usageCommandGroup("room", "Manage rooms.", "csgclaw room <subcommand> [flags]", []string{
+		a.usageCommandGroup("room", "Manage IM rooms.", "csgclaw room <subcommand> [flags]", []string{
 			"list               List rooms",
 			"create             Create a room",
 			"delete <id>        Delete a room",
@@ -19,7 +19,7 @@ func (a *App) runRoom(ctx context.Context, args []string, globals GlobalOptions)
 		return flag.ErrHelp
 	}
 	if isHelpArg(args[0]) {
-		a.usageCommandGroup("room", "Manage rooms.", "csgclaw room <subcommand> [flags]", []string{
+		a.usageCommandGroup("room", "Manage IM rooms.", "csgclaw room <subcommand> [flags]", []string{
 			"list               List rooms",
 			"create             Create a room",
 			"delete <id>        Delete a room",
@@ -35,7 +35,7 @@ func (a *App) runRoom(ctx context.Context, args []string, globals GlobalOptions)
 	case "delete":
 		return a.runRoomDelete(ctx, args[1:], globals)
 	default:
-		a.usageCommandGroup("room", "Manage rooms.", "csgclaw room <subcommand> [flags]", []string{
+		a.usageCommandGroup("room", "Manage IM rooms.", "csgclaw room <subcommand> [flags]", []string{
 			"list               List rooms",
 			"create             Create a room",
 			"delete <id>        Delete a room",

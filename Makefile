@@ -55,7 +55,7 @@ build: boxlite-setup
 	env GOCACHE=$(GOCACHE) $(GO) build -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/csgclaw
 
 run: boxlite-setup
-	env GOCACHE=$(GOCACHE) $(GO) run -ldflags "$(LDFLAGS)" ./cmd/csgclaw start
+	env GOCACHE=$(GOCACHE) $(GO) run -ldflags "$(LDFLAGS)" ./cmd/csgclaw serve
 
 onboard: boxlite-setup
 	env GOCACHE=$(GOCACHE) $(GO) run -ldflags "$(LDFLAGS)" ./cmd/csgclaw onboard \

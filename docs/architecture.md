@@ -27,7 +27,7 @@ Both capabilities are exposed through a unified HTTP server and a single CLI bin
           ┌──────────▼──────┐  ┌────────▼──────────┐
           │  Agent Manager  │  │     IM System      │
           │                 │  │                    │
-          │  start / stop   │  │  rooms / users     │
+          │  serve / stop   │  │  rooms / users     │
           │  status / logs  │  │  messaging / push  │
           └──────┬──────────┘  └────────┬───────────┘
                  │                      │

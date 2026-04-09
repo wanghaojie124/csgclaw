@@ -12,7 +12,7 @@
 
 - [x] 明确首期目标是建设一个标准 Go 项目，同时覆盖 Server 与 CLI 两部分能力。
 - [x] 明确 Server 侧核心职责：通过 REST API 创建 Agent，并支持 `name`、`image` 等必要参数。
-- [x] 定义 CLI 主流程，包括 `onboard`、`start`、`create` 三个子命令，分别对应本地配置初始化、守护进程启动和 Agent 创建。
+- [x] 定义 CLI 主流程，包括 `onboard`、`serve`、`create` 三个子命令，分别对应本地配置初始化、服务启动和 Agent 创建。
 - [x] 初步确定配置方案，`~/.csgclaw/config.toml` 用于承载模型接入所需的 `base_url`、`api_key` 和 `model_id` 等基础参数。
 - [x] 完成 BoxLite Go SDK 与 Python SDK 的技术调研，并确认 vendored SDK、`go generate`、运行时创建 box、端口映射、数据卷挂载等关键集成点。
 - [x] 沉淀容器化运行 OpenClaw / Agent Gateway 的配置与启动样例，可作为后续 Server daemon 化和本地开发联调的实现参考。

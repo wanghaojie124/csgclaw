@@ -5,7 +5,7 @@
 1. Server: 支持通过REST API创建一个Agent，一个Agent包括name, image等必要参数
 2. CLI: 支持两个子命令
     - csgclaw onboard: 初始化 ~/.csgclaw/config.toml（里面最基本可以配置llm model的base_url、api_key和model_id）
-    - csgclaw start: 以daemon形式启动上述Server
+    - csgclaw serve: 启动上述 Server（可通过 `-d` 以 daemon 形式运行）
 
 ## Go SDK用法
 

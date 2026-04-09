@@ -10,14 +10,14 @@ import (
 
 func (a *App) runUser(ctx context.Context, args []string, globals GlobalOptions) error {
 	if len(args) == 0 {
-		a.usageCommandGroup("user", "Manage users.", "csgclaw user <subcommand> [flags]", []string{
+		a.usageCommandGroup("user", "Manage IM users.", "csgclaw user <subcommand> [flags]", []string{
 			"list               List users",
 			"kick <id>          Remove a user",
 		})
 		return flag.ErrHelp
 	}
 	if isHelpArg(args[0]) {
-		a.usageCommandGroup("user", "Manage users.", "csgclaw user <subcommand> [flags]", []string{
+		a.usageCommandGroup("user", "Manage IM users.", "csgclaw user <subcommand> [flags]", []string{
 			"list               List users",
 			"kick <id>          Remove a user",
 		})
@@ -30,7 +30,7 @@ func (a *App) runUser(ctx context.Context, args []string, globals GlobalOptions)
 	case "kick":
 		return a.runUserKick(ctx, args[1:], globals)
 	default:
-		a.usageCommandGroup("user", "Manage users.", "csgclaw user <subcommand> [flags]", []string{
+		a.usageCommandGroup("user", "Manage IM users.", "csgclaw user <subcommand> [flags]", []string{
 			"list               List users",
 			"kick <id>          Remove a user",
 		})

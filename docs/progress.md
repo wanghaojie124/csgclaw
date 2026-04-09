@@ -13,7 +13,7 @@
 
 当前项目已经具备一个最小闭环，但与 `docs/architecture.md` 的目标架构相比，仍然更接近“单二进制 + 内嵌服务对象 + 面向当前 IM/PicoClaw 场景的专用 API”：
 
-- CLI 入口集中在 `cmd/csgclaw/main.go`，当前只有 `onboard`、`start`、`_serve` 三类命令。
+- CLI 入口集中在 `cmd/csgclaw/main.go`，当前对外入口以 `onboard`、`serve`、`stop` 与资源型子命令为主，内部仍保留 `_serve` 作为守护进程子进程入口。
 - HTTP 路由与 handler 已拆到 `internal/api/`，`internal/server/` 主要负责 server lifecycle、mux 装配与 UI 托管。
 - Agent 能力目前以 `worker` 为中心暴露，核心入口是 `GET/POST /api/v1/workers`。
 - IM 能力目前以 `/api/v1/im/*` 命名空间和 SSE 为主，不是目标文档里的扁平 REST + WebSocket 结构。
@@ -34,7 +34,7 @@
 - `现状`：[`cmd/csgclaw/main.go`](/Users/russellluo/Projects/work/opencsg/projects/csgclaw/cmd/csgclaw/main.go) 已切到 `cli.New().Execute(...)`；[`cli/`](/Users/russellluo/Projects/work/opencsg/projects/csgclaw/cli) 中已经补齐 `agent create/delete/status`、`room list/create/delete`、`user list/kick`，`message` 命令树和 `agent logs` 仍未实现。
 - `影响`：CLI 和服务端生命周期耦合，后续很难平滑过渡到“远程可调用”的命令模型。
 - `推荐增量步骤`：
-  - [x] A01-1 新增 `serve` 命令，内部先复用当前 `start` 逻辑，保留 `start` 作为兼容别名。
+  - [x] A01-1 新增 `serve` 命令并承接服务启动入口；后续已移除 `start` 兼容别名。
   - [x] A01-2 新增 `stop` 命令，先基于当前后台进程管理方式落地，哪怕暂时仍沿用现有状态目录。
   - [x] A01-3 引入 `cli/` 目录并抽出 root/serve/stop 的命令注册，`main.go` 只保留启动装配。
   - [x] A01-4 为后续资源型命令准备统一 HTTP client 和全局 flag 骨架。

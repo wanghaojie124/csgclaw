@@ -56,7 +56,7 @@ func (a *App) Execute(ctx context.Context, args []string) error {
 	switch rest[0] {
 	case "onboard":
 		return a.runOnboard(rest[1:], globals)
-	case "serve", "start":
+	case "serve":
 		if a.serveFunc != nil {
 			return a.serveFunc(ctx, rest[1:], globals)
 		}
@@ -147,11 +147,10 @@ func (a *App) usage() {
 	fmt.Fprintln(a.stderr, "Available Commands:")
 	fmt.Fprintln(a.stderr, "  onboard  Initialize local config and bootstrap state")
 	fmt.Fprintln(a.stderr, "  serve    Start the local HTTP server")
-	fmt.Fprintln(a.stderr, "  start    Alias for serve")
 	fmt.Fprintln(a.stderr, "  stop     Stop the local HTTP server")
 	fmt.Fprintln(a.stderr, "  agent    Manage agents")
-	fmt.Fprintln(a.stderr, "  room     Manage rooms")
-	fmt.Fprintln(a.stderr, "  user     Manage users")
+	fmt.Fprintln(a.stderr, "  room     Manage IM rooms")
+	fmt.Fprintln(a.stderr, "  user     Manage IM users")
 	fmt.Fprintln(a.stderr)
 	fmt.Fprintln(a.stderr, "Examples:")
 	fmt.Fprintln(a.stderr, "  csgclaw -h")

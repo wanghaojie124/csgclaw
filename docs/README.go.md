@@ -3,7 +3,7 @@
 This repository now includes a minimal Go implementation for:
 
 - `csgclaw onboard`
-- `csgclaw start`
+- `csgclaw serve`
 - `POST /api/v1/workers`
 
 Notes:

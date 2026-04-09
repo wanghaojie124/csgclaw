@@ -359,8 +359,8 @@ func TestUsageIncludesTopLevelCommandIndex(t *testing.T) {
 	for _, want := range []string{
 		"Available Commands:",
 		"agent    Manage agents",
-		"room     Manage rooms",
-		"user     Manage users",
+		"room     Manage IM rooms",
+		"user     Manage IM users",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("usage = %q, want substring %q", got, want)
@@ -385,8 +385,8 @@ func TestRootHelpIncludesAvailableCommands(t *testing.T) {
 	for _, want := range []string{
 		"Available Commands:",
 		"agent    Manage agents",
-		"room     Manage rooms",
-		"user     Manage users",
+		"room     Manage IM rooms",
+		"user     Manage IM users",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("help = %q, want substring %q", got, want)
@@ -488,29 +488,23 @@ func TestAgentSubcommandHelpIncludesUsageAndFlags(t *testing.T) {
 	}
 }
 
-func TestExecuteStartRemainsServeAlias(t *testing.T) {
-	called := false
+func TestExecuteStartIsRejected(t *testing.T) {
+	var stderr bytes.Buffer
 	app := &App{
 		stdout:     &bytes.Buffer{},
-		stderr:     &bytes.Buffer{},
+		stderr:     &stderr,
 		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) { return nil, nil }),
-		serveFunc: func(_ context.Context, args []string, globals GlobalOptions) error {
-			called = true
-			if len(args) != 0 {
-				t.Fatalf("args = %v, want empty", args)
-			}
-			if globals.Config != "/tmp/test.toml" {
-				t.Fatalf("globals.Config = %q, want /tmp/test.toml", globals.Config)
-			}
-			return nil
-		},
 	}
 
-	if err := app.Execute(context.Background(), []string{"--config", "/tmp/test.toml", "start"}); err != nil {
-		t.Fatalf("Execute() error = %v", err)
+	err := app.Execute(context.Background(), []string{"--config", "/tmp/test.toml", "start"})
+	if err == nil {
+		t.Fatal("Execute() error = nil, want unknown command")
 	}
-	if !called {
-		t.Fatal("serveFunc was not called for start alias")
+	if !strings.Contains(err.Error(), `unknown command "start"`) {
+		t.Fatalf("Execute() error = %v, want unknown command start", err)
+	}
+	if !strings.Contains(stderr.String(), "  serve    Start the local HTTP server") {
+		t.Fatalf("stderr = %q, want serve command in usage", stderr.String())
 	}
 }
 
