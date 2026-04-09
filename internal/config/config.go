@@ -17,8 +17,8 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	ListenAddr string
-	APIBaseURL string
+	ListenAddr       string
+	AdvertiseBaseURL string
 }
 
 type LLMConfig struct {
@@ -44,7 +44,6 @@ const (
 	IMDirName          = "im"
 
 	DefaultListenAddr          = "0.0.0.0:18080"
-	DefaultAPIBaseURL          = "http://127.0.0.1:18080"
 	DefaultLLMBaseURL          = "http://127.0.0.1:4000"
 	DefaultLLMAPIKey           = "sk-1234567890"
 	DefaultLLMModelID          = "minimax-m2.7"
@@ -142,8 +141,8 @@ func Load(path string) (Config, error) {
 			switch key {
 			case "listen_addr":
 				cfg.Server.ListenAddr = value
-			case "api_base_url":
-				cfg.Server.APIBaseURL = strings.TrimRight(value, "/")
+			case "advertise_base_url":
+				cfg.Server.AdvertiseBaseURL = strings.TrimRight(value, "/")
 			}
 		case "llm":
 			switch key {
@@ -175,9 +174,6 @@ func Load(path string) (Config, error) {
 	if cfg.Server.ListenAddr == "" {
 		cfg.Server.ListenAddr = DefaultListenAddr
 	}
-	if cfg.Server.APIBaseURL == "" {
-		cfg.Server.APIBaseURL = DefaultAPIBaseURL
-	}
 	if cfg.Bootstrap.ManagerImage == "" {
 		cfg.Bootstrap.ManagerImage = DefaultManagerImage
 	}
@@ -196,7 +192,7 @@ func (c Config) Save(path string) error {
 
 [server]
 listen_addr = %q
-api_base_url = %q
+advertise_base_url = %q
 
 [llm]
 base_url = %q
@@ -208,7 +204,7 @@ manager_image = %q
 
 [picoclaw]
 access_token = %q
-`, c.Server.ListenAddr, c.Server.APIBaseURL, c.LLM.BaseURL, c.LLM.APIKey, c.LLM.ModelID, c.Bootstrap.ManagerImage, c.PicoClaw.AccessToken)
+`, c.Server.ListenAddr, c.Server.AdvertiseBaseURL, c.LLM.BaseURL, c.LLM.APIKey, c.LLM.ModelID, c.Bootstrap.ManagerImage, c.PicoClaw.AccessToken)
 
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		return fmt.Errorf("write config: %w", err)

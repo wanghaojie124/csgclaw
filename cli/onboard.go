@@ -23,7 +23,6 @@ func (a *App) runOnboard(args []string, globals GlobalOptions) error {
 	cfg := config.Config{
 		Server: config.ServerConfig{
 			ListenAddr: config.DefaultListenAddr,
-			APIBaseURL: config.DefaultAPIBaseURL,
 		},
 		LLM: config.LLMConfig{
 			BaseURL: *baseURL,

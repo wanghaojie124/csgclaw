@@ -137,8 +137,8 @@ func resolveManagerBaseURL(server config.ServerConfig) string {
 	if ip := localIPv4Resolver(); ip != "" {
 		return fmt.Sprintf("http://%s:%s", ip, port)
 	}
-	if server.APIBaseURL != "" {
-		return strings.TrimRight(server.APIBaseURL, "/")
+	if server.AdvertiseBaseURL != "" {
+		return strings.TrimRight(server.AdvertiseBaseURL, "/")
 	}
 	return ""
 }

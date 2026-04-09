@@ -45,7 +45,7 @@ func TestServeForegroundPassesContextToServer(t *testing.T) {
 	}
 	cfg := config.Config{
 		Server: config.ServerConfig{
-			APIBaseURL: "http://example.test",
+			AdvertiseBaseURL: "http://example.test",
 		},
 	}
 
@@ -54,5 +54,24 @@ func TestServeForegroundPassesContextToServer(t *testing.T) {
 	}
 	if !called {
 		t.Fatal("runServer was not called")
+	}
+}
+
+func TestAPIBaseURLDefaultsToLocalhost(t *testing.T) {
+	got := apiBaseURL(config.ServerConfig{ListenAddr: "0.0.0.0:19090"})
+	want := "http://127.0.0.1:19090"
+	if got != want {
+		t.Fatalf("apiBaseURL() = %q, want %q", got, want)
+	}
+}
+
+func TestAPIBaseURLPrefersAdvertiseBaseURL(t *testing.T) {
+	got := apiBaseURL(config.ServerConfig{
+		ListenAddr:       "0.0.0.0:19090",
+		AdvertiseBaseURL: "http://example.test/base/",
+	})
+	want := "http://example.test/base"
+	if got != want {
+		t.Fatalf("apiBaseURL() = %q, want %q", got, want)
 	}
 }

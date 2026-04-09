@@ -986,8 +986,8 @@ func TestResolveManagerBaseURLPrefersLocalIP(t *testing.T) {
 	})
 
 	got := resolveManagerBaseURL(config.ServerConfig{
-		ListenAddr: "0.0.0.0:19090",
-		APIBaseURL: "http://127.0.0.1:18080",
+		ListenAddr:       "0.0.0.0:19090",
+		AdvertiseBaseURL: "http://127.0.0.1:18080",
 	})
 
 	want := "http://10.0.0.8:19090"

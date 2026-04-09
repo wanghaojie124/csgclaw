@@ -45,7 +45,7 @@ const messages = {
     participants: "成员",
     mentionBadge: "@ 提及",
     inviteMembers: "邀请成员",
-    inputPlaceholder: "输入消息，使用 @ 调出成员建议",
+    inputPlaceholder: "输入消息，使用 @ 选择成员",
     send: "发送",
     composerTip: "Enter 发送，Shift + Enter 换行。支持多人房间、双人房间和 @ 提及。",
     createRoomTitle: "创建房间",

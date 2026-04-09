@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -50,7 +51,7 @@ func (a *App) runServe(ctx context.Context, args []string, globals GlobalOptions
 		return err
 	}
 	if globals.Endpoint != "" {
-		cfg.Server.APIBaseURL = strings.TrimRight(globals.Endpoint, "/")
+		cfg.Server.AdvertiseBaseURL = strings.TrimRight(globals.Endpoint, "/")
 	}
 
 	if *daemon {
@@ -82,7 +83,7 @@ func (a *App) runInternalServe(ctx context.Context, args []string, globals Globa
 		return err
 	}
 	if globals.Endpoint != "" {
-		cfg.Server.APIBaseURL = strings.TrimRight(globals.Endpoint, "/")
+		cfg.Server.AdvertiseBaseURL = strings.TrimRight(globals.Endpoint, "/")
 	}
 
 	var svc *agent.Service
@@ -118,7 +119,8 @@ func (a *App) serveForeground(ctx context.Context, cfg config.Config) error {
 		return err
 	}
 	imBus := im.NewBus()
-	imURL := imOpenURL(cfg.Server.APIBaseURL)
+	apiURL := apiBaseURL(cfg.Server)
+	imURL := imOpenURL(apiURL)
 
 	fmt.Fprintf(a.stdout, "CSGClaw IM is available at: %s\n", imURL)
 	fmt.Fprintln(a.stdout, "Open this URL in your browser after startup.")
@@ -159,14 +161,15 @@ func (a *App) serveBackground(cfg config.Config, globals GlobalOptions, logPath,
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start daemon: %w", err)
 	}
-	if err := waitForHealthy(cfg.Server.APIBaseURL, 5*time.Second); err != nil {
+	apiURL := apiBaseURL(cfg.Server)
+	if err := waitForHealthy(apiURL, 5*time.Second); err != nil {
 		_ = cmd.Process.Kill()
 		return fmt.Errorf("server process started (pid %d) but health check failed: %w; see %s", cmd.Process.Pid, err, logPath)
 	}
 
 	fmt.Fprintf(a.stdout, "server started in background (pid %d)\n", cmd.Process.Pid)
-	fmt.Fprintf(a.stdout, "im: %s\n", imOpenURL(cfg.Server.APIBaseURL))
-	fmt.Fprintf(a.stdout, "api: %s\n", cfg.Server.APIBaseURL)
+	fmt.Fprintf(a.stdout, "im: %s\n", imOpenURL(apiURL))
+	fmt.Fprintf(a.stdout, "api: %s\n", apiURL)
 	fmt.Fprintf(a.stdout, "log: %s\n", logPath)
 	fmt.Fprintf(a.stdout, "pid: %s\n", pidPath)
 	return nil
@@ -279,6 +282,27 @@ func imOpenURL(apiBaseURL string) string {
 	return strings.TrimRight(apiBaseURL, "/") + "/"
 }
 
+func apiBaseURL(server config.ServerConfig) string {
+	if server.AdvertiseBaseURL != "" {
+		return strings.TrimRight(server.AdvertiseBaseURL, "/")
+	}
+
+	host := "127.0.0.1"
+	port := "18080"
+	if server.ListenAddr == "" {
+		return "http://127.0.0.1:18080"
+	}
+	if parsedHost, parsedPort, err := net.SplitHostPort(server.ListenAddr); err == nil {
+		if parsedPort != "" {
+			port = parsedPort
+		}
+		if parsedHost != "" && parsedHost != "0.0.0.0" && parsedHost != "::" {
+			host = parsedHost
+		}
+	}
+	return fmt.Sprintf("http://%s:%s", host, port)
+}
+
 func loadConfig(path string) (config.Config, error) {
 	if path == "" {
 		return config.LoadDefault()
@@ -297,7 +321,6 @@ func loadConfigAllowMissing(path string) (config.Config, error) {
 		return config.Config{
 			Server: config.ServerConfig{
 				ListenAddr: config.DefaultListenAddr,
-				APIBaseURL: config.DefaultAPIBaseURL,
 			},
 		}, nil
 	}

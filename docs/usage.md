@@ -34,7 +34,8 @@ csgclaw onboard \
 参数含义：
 
 - `onboard` 只负责写入基础配置并初始化本地状态
-- `listen_addr`、`api_base_url` 使用内置默认值
+- `listen_addr` 使用内置默认值
+- `advertise_base_url` 是可选扩展配置，本地使用通常不需要设置
 - `manager_image` 会写入 `~/.csgclaw/config.toml`，后续可按需修改
 - PicoClaw 相关的 `access_token` 需要在初始化后手动修改 `~/.csgclaw/config.toml`
 
@@ -213,7 +214,7 @@ curl -X POST \
 ```toml
 [server]
 listen_addr = "0.0.0.0:18080"
-api_base_url = "http://127.0.0.1:18080"
+advertise_base_url = ""
 
 [llm]
 base_url = "http://127.0.0.1:4000"

@@ -50,7 +50,7 @@ func TestLoadAppliesDefaultManagerImage(t *testing.T) {
 	path := filepath.Join(dir, "config.toml")
 	content := `[server]
 listen_addr = "127.0.0.1:18080"
-api_base_url = "http://127.0.0.1:18080"
+advertise_base_url = "http://127.0.0.1:18080"
 
 [llm]
 base_url = "http://127.0.0.1:4000"
