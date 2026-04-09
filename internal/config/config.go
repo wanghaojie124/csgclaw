@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,10 +40,30 @@ const (
 	AgentsDirName      = "agents"
 	IMDirName          = "im"
 
-	DefaultListenAddr   = "0.0.0.0:18080"
+	DefaultHTTPPort     = "18080"
 	DefaultAccessToken  = "your_access_token"
 	DefaultManagerImage = "ghcr.io/russellluo/picoclaw:2026.4.8.1"
 )
+
+func DefaultListenAddr() string {
+	return net.JoinHostPort("0.0.0.0", DefaultHTTPPort)
+}
+
+func DefaultAPIBaseURL() string {
+	return "http://" + net.JoinHostPort("127.0.0.1", DefaultHTTPPort)
+}
+
+func ListenPort(listenAddr string) string {
+	if listenAddr == "" {
+		return DefaultHTTPPort
+	}
+
+	_, port, err := net.SplitHostPort(listenAddr)
+	if err != nil || port == "" {
+		return DefaultHTTPPort
+	}
+	return port
+}
 
 func (c ModelConfig) MissingFields() []string {
 	var missing []string
@@ -174,7 +195,7 @@ func Load(path string) (Config, error) {
 	}
 
 	if cfg.Server.ListenAddr == "" {
-		cfg.Server.ListenAddr = DefaultListenAddr
+		cfg.Server.ListenAddr = DefaultListenAddr()
 	}
 	if cfg.Bootstrap.ManagerImage == "" {
 		cfg.Bootstrap.ManagerImage = DefaultManagerImage

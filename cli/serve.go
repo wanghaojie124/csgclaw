@@ -290,15 +290,12 @@ func apiBaseURL(server config.ServerConfig) string {
 		return strings.TrimRight(server.AdvertiseBaseURL, "/")
 	}
 
-	host := "127.0.0.1"
-	port := "18080"
+	port := config.ListenPort(server.ListenAddr)
 	if server.ListenAddr == "" {
-		return "http://127.0.0.1:18080"
+		return config.DefaultAPIBaseURL()
 	}
-	if parsedHost, parsedPort, err := net.SplitHostPort(server.ListenAddr); err == nil {
-		if parsedPort != "" {
-			port = parsedPort
-		}
+	host := "127.0.0.1"
+	if parsedHost, _, err := net.SplitHostPort(server.ListenAddr); err == nil {
 		if parsedHost != "" && parsedHost != "0.0.0.0" && parsedHost != "::" {
 			host = parsedHost
 		}

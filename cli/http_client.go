@@ -13,6 +13,7 @@ import (
 	"text/tabwriter"
 
 	"csgclaw/internal/agent"
+	"csgclaw/internal/config"
 	"csgclaw/internal/im"
 )
 
@@ -28,7 +29,7 @@ type APIClient struct {
 
 func NewAPIClient(endpoint, token string, client HTTPClient) *APIClient {
 	if endpoint == "" {
-		endpoint = "http://127.0.0.1:18080"
+		endpoint = config.DefaultAPIBaseURL()
 	}
 	return &APIClient{
 		endpoint: strings.TrimRight(endpoint, "/"),

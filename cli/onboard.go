@@ -38,7 +38,7 @@ func (a *App) runOnboard(args []string, globals GlobalOptions) error {
 	if !hasExistingConfig {
 		cfg = config.Config{
 			Server: config.ServerConfig{
-				ListenAddr:  config.DefaultListenAddr,
+				ListenAddr:  config.DefaultListenAddr(),
 				AccessToken: config.DefaultAccessToken,
 			},
 			Bootstrap: config.BootstrapConfig{

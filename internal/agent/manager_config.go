@@ -128,12 +128,7 @@ func updateCSGClawChannel(cfg map[string]any, botID string, server config.Server
 }
 
 func resolveManagerBaseURL(server config.ServerConfig) string {
-	port := "18080"
-	if server.ListenAddr != "" {
-		if _, resolvedPort, err := net.SplitHostPort(server.ListenAddr); err == nil && resolvedPort != "" {
-			port = resolvedPort
-		}
-	}
+	port := config.ListenPort(server.ListenAddr)
 	if ip := localIPv4Resolver(); ip != "" {
 		return fmt.Sprintf("http://%s:%s", ip, port)
 	}

@@ -77,6 +77,13 @@ func TestAPIBaseURLPrefersAdvertiseBaseURL(t *testing.T) {
 	}
 }
 
+func TestAPIBaseURLFallsBackToSharedDefault(t *testing.T) {
+	got := apiBaseURL(config.ServerConfig{})
+	if got != config.DefaultAPIBaseURL() {
+		t.Fatalf("apiBaseURL() = %q, want %q", got, config.DefaultAPIBaseURL())
+	}
+}
+
 func TestValidateModelConfigRequiresOnboardWhenIncomplete(t *testing.T) {
 	err := validateModelConfig(config.Config{})
 	if err == nil {
