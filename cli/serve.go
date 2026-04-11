@@ -331,6 +331,13 @@ model_id = %q
 manager_image = %q
 `, cfg.Server.ListenAddr, cfg.Server.AdvertiseBaseURL, partiallyMaskSecret(cfg.Server.AccessToken), cfg.Model.BaseURL, partiallyMaskSecret(cfg.Model.APIKey), cfg.Model.ModelID, cfg.Bootstrap.ManagerImage)
 
+	if strings.TrimSpace(cfg.Channels.FeishuAdminOpenID) != "" {
+		content += fmt.Sprintf(`
+[channels.feishu]
+admin_open_id = %q
+`, cfg.Channels.FeishuAdminOpenID)
+	}
+
 	if len(cfg.Channels.Feishu) > 0 {
 		names := make([]string, 0, len(cfg.Channels.Feishu))
 		for name := range cfg.Channels.Feishu {
@@ -419,15 +426,16 @@ func newIMService() (*im.Service, error) {
 }
 
 func newFeishuService(cfg config.Config) (*channel.FeishuService, error) {
-	return channel.NewFeishuService(feishuAppsFromConfig(cfg.Channels.Feishu)), nil
+	return channel.NewFeishuService(feishuAppsFromConfig(cfg.Channels)), nil
 }
 
-func feishuAppsFromConfig(cfg map[string]config.FeishuConfig) map[string]channel.FeishuAppConfig {
-	apps := make(map[string]channel.FeishuAppConfig, len(cfg))
-	for name, app := range cfg {
+func feishuAppsFromConfig(cfg config.ChannelsConfig) map[string]channel.FeishuAppConfig {
+	apps := make(map[string]channel.FeishuAppConfig, len(cfg.Feishu))
+	for name, app := range cfg.Feishu {
 		apps[name] = channel.FeishuAppConfig{
-			AppID:     app.AppID,
-			AppSecret: app.AppSecret,
+			AppID:       app.AppID,
+			AppSecret:   app.AppSecret,
+			AdminOpenID: cfg.FeishuAdminOpenID,
 		}
 	}
 	return apps

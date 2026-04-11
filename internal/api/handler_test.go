@@ -163,7 +163,16 @@ func TestHandleFeishuUsersCreateAndList(t *testing.T) {
 }
 
 func TestHandleFeishuRoomsMembers(t *testing.T) {
-	feishu := channel.NewFeishuService()
+	feishu := channel.NewFeishuServiceWithCreateChat(
+		map[string]channel.FeishuAppConfig{"fsu-admin": {AppID: "app-id", AppSecret: "app-secret", AdminOpenID: "ou_admin"}},
+		func(_ context.Context, _ channel.FeishuAppConfig, req channel.FeishuCreateChatRequest) (channel.FeishuCreateChatResponse, error) {
+			return channel.FeishuCreateChatResponse{
+				ChatID:      "oc_alpha",
+				Name:        req.Title,
+				Description: req.Description,
+			}, nil
+		},
+	)
 	if _, err := feishu.CreateUser(channel.FeishuCreateUserRequest{ID: "fsu-admin", Name: "Admin"}); err != nil {
 		t.Fatalf("CreateUser(admin) error = %v", err)
 	}

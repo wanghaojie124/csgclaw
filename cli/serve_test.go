@@ -68,6 +68,7 @@ func TestServeForegroundPassesContextToServer(t *testing.T) {
 			ManagerImage: "ghcr.io/example/manager:latest",
 		},
 		Channels: config.ChannelsConfig{
+			FeishuAdminOpenID: "ou_admin",
 			Feishu: map[string]config.FeishuConfig{
 				"manager": {
 					AppID:     "cli_manager",
@@ -91,6 +92,8 @@ func TestServeForegroundPassesContextToServer(t *testing.T) {
 		`advertise_base_url = "http://example.test"`,
 		`api_key = "sk*****et"`,
 		`access_token = "pc*****et"`,
+		`[channels.feishu]`,
+		`admin_open_id = "ou_admin"`,
 		`[channels.feishu.manager]`,
 		`app_id = "cli_manager"`,
 		`app_secret = "ma**********et"`,

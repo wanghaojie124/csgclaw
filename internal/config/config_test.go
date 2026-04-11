@@ -86,6 +86,9 @@ base_url = "http://127.0.0.1:4000"
 api_key = "sk"
 model_id = "minimax-m2.7"
 
+[channels.feishu]
+admin_open_id = "ou_admin"
+
 [channels.feishu.manager]
 app_id = "cli_manager"
 app_secret = "manager-secret"
@@ -105,6 +108,9 @@ app_secret = "dev-secret"
 
 	if got, want := cfg.Channels.Feishu["manager"].AppID, "cli_manager"; got != want {
 		t.Fatalf("manager app_id = %q, want %q", got, want)
+	}
+	if got, want := cfg.Channels.FeishuAdminOpenID, "ou_admin"; got != want {
+		t.Fatalf("feishu admin_open_id = %q, want %q", got, want)
 	}
 	if got, want := cfg.Channels.Feishu["manager"].AppSecret, "manager-secret"; got != want {
 		t.Fatalf("manager app_secret = %q, want %q", got, want)
@@ -135,6 +141,7 @@ func TestSaveWritesAccessTokenUnderServerSection(t *testing.T) {
 			ManagerImage: "img",
 		},
 		Channels: ChannelsConfig{
+			FeishuAdminOpenID: "ou_admin",
 			Feishu: map[string]FeishuConfig{
 				"manager": {
 					AppID:     "cli_manager",
@@ -165,6 +172,7 @@ func TestSaveWritesAccessTokenUnderServerSection(t *testing.T) {
 	}
 	for _, want := range []string{
 		"[channels.feishu.dev]",
+		`admin_open_id = "ou_admin"`,
 		`app_id = "cli_dev"`,
 		`app_secret = "dev-secret"`,
 		"[channels.feishu.manager]",

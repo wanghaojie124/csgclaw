@@ -35,7 +35,8 @@ type BootstrapConfig struct {
 }
 
 type ChannelsConfig struct {
-	Feishu map[string]FeishuConfig
+	FeishuAdminOpenID string
+	Feishu            map[string]FeishuConfig
 }
 
 type FeishuConfig struct {
@@ -208,6 +209,11 @@ func Load(path string) (Config, error) {
 			case "manager_image":
 				cfg.Bootstrap.ManagerImage = value
 			}
+		case section == "channels.feishu":
+			switch key {
+			case "admin_open_id":
+				cfg.Channels.FeishuAdminOpenID = value
+			}
 		case strings.HasPrefix(section, "channels.feishu."):
 			name := strings.TrimPrefix(section, "channels.feishu.")
 			if name == "" {
@@ -262,6 +268,13 @@ model_id = %q
 [bootstrap]
 manager_image = %q
 `, c.Server.ListenAddr, c.Server.AdvertiseBaseURL, c.Server.AccessToken, c.Model.BaseURL, c.Model.APIKey, c.Model.ModelID, c.Bootstrap.ManagerImage)
+
+	if strings.TrimSpace(c.Channels.FeishuAdminOpenID) != "" {
+		content += fmt.Sprintf(`
+[channels.feishu]
+admin_open_id = %q
+`, c.Channels.FeishuAdminOpenID)
+	}
 
 	if len(c.Channels.Feishu) > 0 {
 		names := make([]string, 0, len(c.Channels.Feishu))
