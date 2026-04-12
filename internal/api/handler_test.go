@@ -15,6 +15,7 @@ import (
 	boxlite "github.com/RussellLuo/boxlite/sdks/go"
 
 	"csgclaw/internal/agent"
+	"csgclaw/internal/bot"
 	"csgclaw/internal/channel"
 	"csgclaw/internal/config"
 	"csgclaw/internal/im"
@@ -214,6 +215,116 @@ func TestHandleFeishuRoomsMembers(t *testing.T) {
 	}
 	if len(members) != 2 {
 		t.Fatalf("members = %+v, want two users", members)
+	}
+}
+
+func TestHandleBotsListReturnsAllBots(t *testing.T) {
+	srv := &Handler{botSvc: mustNewBotService(t, []bot.Bot{
+		{
+			ID:        "bot-csgclaw",
+			Name:      "CSGClaw Bot",
+			Role:      string(bot.RoleWorker),
+			Channel:   string(bot.ChannelCSGClaw),
+			AgentID:   "agent-csgclaw",
+			UserID:    "user-csgclaw",
+			CreatedAt: time.Date(2026, 4, 12, 9, 0, 0, 0, time.UTC),
+		},
+		{
+			ID:        "bot-feishu",
+			Name:      "Feishu Bot",
+			Role:      string(bot.RoleManager),
+			Channel:   string(bot.ChannelFeishu),
+			AgentID:   "agent-feishu",
+			UserID:    "user-feishu",
+			CreatedAt: time.Date(2026, 4, 12, 10, 0, 0, 0, time.UTC),
+		},
+	})}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/bots", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var got []bot.Bot
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(got) != 2 || got[0].ID != "bot-csgclaw" || got[1].ID != "bot-feishu" {
+		t.Fatalf("bots = %+v, want all bots in store order", got)
+	}
+}
+
+func TestHandleBotsListFiltersByChannel(t *testing.T) {
+	srv := &Handler{botSvc: mustNewBotService(t, []bot.Bot{
+		{
+			ID:        "bot-csgclaw",
+			Name:      "CSGClaw Bot",
+			Role:      string(bot.RoleWorker),
+			Channel:   string(bot.ChannelCSGClaw),
+			CreatedAt: time.Date(2026, 4, 12, 9, 0, 0, 0, time.UTC),
+		},
+		{
+			ID:        "bot-feishu",
+			Name:      "Feishu Bot",
+			Role:      string(bot.RoleWorker),
+			Channel:   string(bot.ChannelFeishu),
+			CreatedAt: time.Date(2026, 4, 12, 10, 0, 0, 0, time.UTC),
+		},
+	})}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/bots?channel=csgclaw", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var got []bot.Bot
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "bot-csgclaw" {
+		t.Fatalf("bots = %+v, want only bot-csgclaw", got)
+	}
+}
+
+func TestHandleBotsListRejectsInvalidChannel(t *testing.T) {
+	srv := &Handler{botSvc: mustNewBotService(t, nil)}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/bots?channel=unknown", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+}
+
+func TestHandleBotsListRequiresService(t *testing.T) {
+	srv := &Handler{}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/bots", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusServiceUnavailable, rec.Body.String())
+	}
+}
+
+func TestHandleBotsListRejectsUnsupportedMethod(t *testing.T) {
+	srv := &Handler{botSvc: mustNewBotService(t, nil)}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/bots", strings.NewReader(`{}`))
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusMethodNotAllowed, rec.Body.String())
 	}
 }
 
@@ -1065,6 +1176,20 @@ func mustNewSeededService(t *testing.T, agents []agent.Agent) *agent.Service {
 	t.Helper()
 
 	svc, _ := mustNewSeededServiceWithPath(t, agents)
+	return svc
+}
+
+func mustNewBotService(t *testing.T, bots []bot.Bot) *bot.Service {
+	t.Helper()
+
+	store, err := bot.NewMemoryStore(bots)
+	if err != nil {
+		t.Fatalf("bot.NewMemoryStore() error = %v", err)
+	}
+	svc, err := bot.NewService(store)
+	if err != nil {
+		t.Fatalf("bot.NewService() error = %v", err)
+	}
 	return svc
 }
 

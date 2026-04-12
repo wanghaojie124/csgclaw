@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"csgclaw/internal/agent"
+	"csgclaw/internal/bot"
 	"csgclaw/internal/channel"
 	"csgclaw/internal/config"
 	"csgclaw/internal/im"
@@ -26,6 +27,7 @@ import (
 var (
 	runServer          = server.Run
 	newAgentServiceFn  = newAgentService
+	newBotServiceFn    = newBotService
 	newIMServiceFn     = newIMService
 	newFeishuServiceFn = newFeishuService
 )
@@ -104,11 +106,15 @@ func (a *App) runInternalServe(ctx context.Context, args []string, globals Globa
 	if err != nil {
 		return err
 	}
+	botSvc, err := newBotServiceFn()
+	if err != nil {
+		return err
+	}
 	feishuSvc, err := newFeishuServiceFn(cfg)
 	if err != nil {
 		return err
 	}
-	return a.startServer(ctx, cfg, svc, imSvc, feishuSvc)
+	return a.startServer(ctx, cfg, svc, botSvc, imSvc, feishuSvc)
 }
 
 func (a *App) serveForeground(ctx context.Context, cfg config.Config) error {
@@ -117,6 +123,10 @@ func (a *App) serveForeground(ctx context.Context, cfg config.Config) error {
 		return err
 	}
 	imSvc, err := newIMServiceFn()
+	if err != nil {
+		return err
+	}
+	botSvc, err := newBotServiceFn()
 	if err != nil {
 		return err
 	}
@@ -131,7 +141,7 @@ func (a *App) serveForeground(ctx context.Context, cfg config.Config) error {
 	fmt.Fprintf(a.stdout, "CSGClaw IM is available at: %s\n", imURL)
 	fmt.Fprintln(a.stdout, "Open this URL in your browser after startup.")
 
-	return a.startServer(ctx, cfg, svc, imSvc, feishuSvc)
+	return a.startServer(ctx, cfg, svc, botSvc, imSvc, feishuSvc)
 }
 
 func (a *App) serveBackground(cfg config.Config, globals GlobalOptions, logPath, pidPath string) error {
@@ -299,11 +309,12 @@ func apiBaseURL(server config.ServerConfig) string {
 	return fmt.Sprintf("http://%s:%s", host, port)
 }
 
-func (a *App) startServer(ctx context.Context, cfg config.Config, svc *agent.Service, imSvc *im.Service, feishuSvc *channel.FeishuService) error {
+func (a *App) startServer(ctx context.Context, cfg config.Config, svc *agent.Service, botSvc *bot.Service, imSvc *im.Service, feishuSvc *channel.FeishuService) error {
 	imBus := im.NewBus()
 	return runServer(server.Options{
 		ListenAddr: cfg.Server.ListenAddr,
 		Service:    svc,
+		Bot:        botSvc,
 		IM:         imSvc,
 		IMBus:      imBus,
 		PicoClaw:   im.NewPicoClawBridge(cfg.Server.AccessToken),
@@ -423,6 +434,18 @@ func newIMService() (*im.Service, error) {
 		return nil, err
 	}
 	return im.NewServiceFromPath(imStatePath)
+}
+
+func newBotService() (*bot.Service, error) {
+	imStatePath, err := config.DefaultIMStatePath()
+	if err != nil {
+		return nil, err
+	}
+	store, err := bot.NewStore(filepath.Join(filepath.Dir(imStatePath), "bots.json"))
+	if err != nil {
+		return nil, err
+	}
+	return bot.NewService(store)
 }
 
 func newFeishuService(cfg config.Config) (*channel.FeishuService, error) {

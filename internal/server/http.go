@@ -7,6 +7,7 @@ import (
 
 	"csgclaw/internal/agent"
 	"csgclaw/internal/api"
+	"csgclaw/internal/bot"
 	"csgclaw/internal/channel"
 	"csgclaw/internal/im"
 )
@@ -14,6 +15,7 @@ import (
 type Options struct {
 	ListenAddr string
 	Service    *agent.Service
+	Bot        *bot.Service
 	IM         *im.Service
 	IMBus      *im.Bus
 	PicoClaw   *im.PicoClawBridge
@@ -26,7 +28,7 @@ func Run(opts Options) error {
 		opts.Context = context.Background()
 	}
 
-	handler := api.NewHandler(opts.Service, opts.IM, opts.IMBus, opts.PicoClaw, opts.Feishu)
+	handler := api.NewHandlerWithBot(opts.Service, opts.Bot, opts.IM, opts.IMBus, opts.PicoClaw, opts.Feishu)
 	mux := handler.Routes()
 	mux.Handle("/", uiHandler())
 

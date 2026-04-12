@@ -13,6 +13,7 @@ import (
 	"text/tabwriter"
 
 	"csgclaw/internal/agent"
+	"csgclaw/internal/bot"
 	"csgclaw/internal/channel"
 	"csgclaw/internal/config"
 	"csgclaw/internal/im"
@@ -45,6 +46,22 @@ func (c *APIClient) ListAgents(ctx context.Context) ([]agent.Agent, error) {
 		return nil, err
 	}
 	return agents, nil
+}
+
+func (c *APIClient) ListBots(ctx context.Context, channel string) ([]bot.Bot, error) {
+	var bots []bot.Bot
+	values := url.Values{}
+	if strings.TrimSpace(channel) != "" {
+		values.Set("channel", strings.TrimSpace(channel))
+	}
+	path := "/api/v1/bots"
+	if encoded := values.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	if err := c.getJSON(ctx, path, &bots); err != nil {
+		return nil, err
+	}
+	return bots, nil
 }
 
 func (c *APIClient) GetAgent(ctx context.Context, id string) (agent.Agent, error) {
@@ -310,6 +327,15 @@ func renderAgentsTable(w io.Writer, agents []agent.Agent) error {
 	fmt.Fprintln(tw, "ID\tNAME\tROLE\tSTATUS")
 	for _, a := range agents {
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", a.ID, a.Name, a.Role, a.Status)
+	}
+	return tw.Flush()
+}
+
+func renderBotsTable(w io.Writer, bots []bot.Bot) error {
+	tw := newTableWriter(w)
+	fmt.Fprintln(tw, "ID\tNAME\tROLE\tCHANNEL\tAGENT\tUSER")
+	for _, b := range bots {
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", b.ID, b.Name, b.Role, b.Channel, b.AgentID, b.UserID)
 	}
 	return tw.Flush()
 }

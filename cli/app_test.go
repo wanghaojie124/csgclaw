@@ -61,6 +61,52 @@ func TestExecuteAgentListUsesHTTPClient(t *testing.T) {
 	assertTableHasRow(t, stdout.String(), "u-alice", "alice", "worker", "running")
 }
 
+func TestExecuteBotListUsesDefaultChannel(t *testing.T) {
+	var stdout bytes.Buffer
+	app := &App{
+		stdout: &stdout,
+		stderr: &bytes.Buffer{},
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodGet {
+				t.Fatalf("method = %q, want %q", req.Method, http.MethodGet)
+			}
+			if req.URL.String() != "http://example.test/api/v1/bots?channel=csgclaw" {
+				t.Fatalf("url = %q, want csgclaw bot list route", req.URL.String())
+			}
+			return jsonResponse(http.StatusOK, `[{"id":"bot-alice","name":"alice","role":"worker","channel":"csgclaw","agent_id":"u-alice","user_id":"u-alice","created_at":"2026-04-12T09:00:00Z"}]`), nil
+		}),
+	}
+
+	if err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "bot", "list"}); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	assertTableHasRow(t, stdout.String(), "bot-alice", "alice", "worker", "csgclaw", "u-alice", "u-alice")
+}
+
+func TestExecuteBotListFeishuUsesChannelQuery(t *testing.T) {
+	var stdout bytes.Buffer
+	app := &App{
+		stdout: &stdout,
+		stderr: &bytes.Buffer{},
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodGet {
+				t.Fatalf("method = %q, want %q", req.Method, http.MethodGet)
+			}
+			if req.URL.String() != "http://example.test/api/v1/bots?channel=feishu" {
+				t.Fatalf("url = %q, want feishu bot list route", req.URL.String())
+			}
+			return jsonResponse(http.StatusOK, `[{"id":"bot-feishu","name":"feishu","role":"manager","channel":"feishu","agent_id":"u-manager","user_id":"fsu-manager","created_at":"2026-04-12T09:00:00Z"}]`), nil
+		}),
+	}
+
+	if err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "--output", "json", "bot", "list", "--channel", "feishu"}); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(stdout.String(), `"id": "bot-feishu"`) || !strings.Contains(stdout.String(), `"channel": "feishu"`) {
+		t.Fatalf("stdout = %q, want JSON bot payload", stdout.String())
+	}
+}
+
 func TestRenderAgentsTableAlignsLongColumns(t *testing.T) {
 	var buf bytes.Buffer
 	agents := []agent.Agent{
@@ -508,6 +554,7 @@ func TestUsageIncludesTopLevelCommandIndex(t *testing.T) {
 	for _, want := range []string{
 		"Available Commands:",
 		"agent    Manage agents",
+		"bot      Manage bots",
 		"room     Manage IM rooms",
 		"member   Manage IM room members",
 		"user     Manage IM users",
@@ -535,6 +582,7 @@ func TestRootHelpIncludesAvailableCommands(t *testing.T) {
 	for _, want := range []string{
 		"Available Commands:",
 		"agent    Manage agents",
+		"bot      Manage bots",
 		"room     Manage IM rooms",
 		"member   Manage IM room members",
 		"user     Manage IM users",
@@ -606,6 +654,31 @@ func TestAgentHelpIncludesSubcommands(t *testing.T) {
 		"create             Create an agent",
 		"delete <id>        Delete an agent",
 		"status [id]        Show one agent or list all agents",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("help = %q, want substring %q", got, want)
+		}
+	}
+}
+
+func TestBotHelpIncludesSubcommands(t *testing.T) {
+	var stderr bytes.Buffer
+	app := &App{
+		stdout:     &bytes.Buffer{},
+		stderr:     &stderr,
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) { return nil, nil }),
+	}
+
+	err := app.Execute(context.Background(), []string{"bot", "-h"})
+	if err != flag.ErrHelp {
+		t.Fatalf("Execute() error = %v, want %v", err, flag.ErrHelp)
+	}
+
+	got := stderr.String()
+	for _, want := range []string{
+		"Manage bots.",
+		"csgclaw bot <subcommand> [flags]",
+		"list               List bots",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("help = %q, want substring %q", got, want)

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"csgclaw/internal/agent"
+	"csgclaw/internal/bot"
 	"csgclaw/internal/channel"
 	"csgclaw/internal/config"
 	"csgclaw/internal/im"
@@ -16,11 +17,13 @@ import (
 func TestServeForegroundPassesContextToServer(t *testing.T) {
 	origRunServer := runServer
 	origNewAgentService := newAgentServiceFn
+	origNewBotService := newBotServiceFn
 	origNewIMService := newIMServiceFn
 	origNewFeishuService := newFeishuServiceFn
 	t.Cleanup(func() {
 		runServer = origRunServer
 		newAgentServiceFn = origNewAgentService
+		newBotServiceFn = origNewBotService
 		newIMServiceFn = origNewIMService
 		newFeishuServiceFn = origNewFeishuService
 	})
@@ -32,6 +35,10 @@ func TestServeForegroundPassesContextToServer(t *testing.T) {
 	}
 	newIMServiceFn = func() (*im.Service, error) {
 		return nil, nil
+	}
+	wantBotSvc := &bot.Service{}
+	newBotServiceFn = func() (*bot.Service, error) {
+		return wantBotSvc, nil
 	}
 	newFeishuServiceFn = func(cfg config.Config) (*channel.FeishuService, error) {
 		if got, want := cfg.Channels.Feishu["manager"].AppID, "cli_manager"; got != want {
@@ -45,6 +52,9 @@ func TestServeForegroundPassesContextToServer(t *testing.T) {
 		called = true
 		if opts.Context != ctx {
 			t.Fatalf("Context = %v, want %v", opts.Context, ctx)
+		}
+		if opts.Bot != wantBotSvc {
+			t.Fatalf("Bot = %v, want injected bot service", opts.Bot)
 		}
 		return nil
 	}

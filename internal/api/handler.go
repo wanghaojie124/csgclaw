@@ -10,12 +10,14 @@ import (
 	"time"
 
 	"csgclaw/internal/agent"
+	"csgclaw/internal/bot"
 	"csgclaw/internal/channel"
 	"csgclaw/internal/im"
 )
 
 type Handler struct {
 	svc      *agent.Service
+	botSvc   *bot.Service
 	im       *im.Service
 	imBus    *im.Bus
 	picoclaw *im.PicoClawBridge
@@ -58,8 +60,13 @@ type addRoomMembersRequest struct {
 }
 
 func NewHandler(svc *agent.Service, imSvc *im.Service, imBus *im.Bus, picoclaw *im.PicoClawBridge, feishu *channel.FeishuService) *Handler {
+	return NewHandlerWithBot(svc, nil, imSvc, imBus, picoclaw, feishu)
+}
+
+func NewHandlerWithBot(svc *agent.Service, botSvc *bot.Service, imSvc *im.Service, imBus *im.Bus, picoclaw *im.PicoClawBridge, feishu *channel.FeishuService) *Handler {
 	return &Handler{
 		svc:      svc,
+		botSvc:   botSvc,
 		im:       imSvc,
 		imBus:    imBus,
 		picoclaw: picoclaw,
@@ -86,6 +93,24 @@ func (h *Handler) handleWorkers(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (h *Handler) handleBots(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.botSvc == nil {
+		http.Error(w, "bot service is not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	bots, err := h.botSvc.List(r.URL.Query().Get("channel"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, bots)
 }
 
 func (h *Handler) handleAgents(w http.ResponseWriter, r *http.Request) {

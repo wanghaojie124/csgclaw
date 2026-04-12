@@ -19,6 +19,7 @@ type App struct {
 	serveFunc  func(context.Context, []string, GlobalOptions) error
 	stopFunc   func([]string, GlobalOptions) error
 	agentFunc  func(context.Context, []string, GlobalOptions) error
+	botFunc    func(context.Context, []string, GlobalOptions) error
 	roomFunc   func(context.Context, []string, GlobalOptions) error
 	memberFunc func(context.Context, []string, GlobalOptions) error
 	userFunc   func(context.Context, []string, GlobalOptions) error
@@ -72,6 +73,11 @@ func (a *App) Execute(ctx context.Context, args []string) error {
 			return a.agentFunc(ctx, rest[1:], globals)
 		}
 		return a.runAgent(ctx, rest[1:], globals)
+	case "bot":
+		if a.botFunc != nil {
+			return a.botFunc(ctx, rest[1:], globals)
+		}
+		return a.runBot(ctx, rest[1:], globals)
 	case "room":
 		if a.roomFunc != nil {
 			return a.roomFunc(ctx, rest[1:], globals)
@@ -155,6 +161,7 @@ func (a *App) usage() {
 	fmt.Fprintln(a.stderr, "  serve    Start the local HTTP server")
 	fmt.Fprintln(a.stderr, "  stop     Stop the local HTTP server")
 	fmt.Fprintln(a.stderr, "  agent    Manage agents")
+	fmt.Fprintln(a.stderr, "  bot      Manage bots")
 	fmt.Fprintln(a.stderr, "  room     Manage IM rooms")
 	fmt.Fprintln(a.stderr, "  member   Manage IM room members")
 	fmt.Fprintln(a.stderr, "  user     Manage IM users")
