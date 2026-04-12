@@ -44,7 +44,12 @@ func (h *Handler) handleFeishuRooms(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		writeJSON(w, http.StatusOK, h.feishu.ListRooms())
+		rooms, err := h.feishu.ListRooms()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, http.StatusOK, rooms)
 	case http.MethodPost:
 		var req im.CreateRoomRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

@@ -58,6 +58,8 @@ type FeishuAddChatMembersFunc func(context.Context, FeishuAppConfig, FeishuAddCh
 
 type FeishuListChatMembersFunc func(context.Context, FeishuAppConfig, string) ([]im.User, error)
 
+type FeishuListChatsFunc func(context.Context, FeishuAppConfig) ([]im.Room, error)
+
 type FeishuService struct {
 	mu              sync.RWMutex
 	users           map[string]im.User
@@ -67,6 +69,7 @@ type FeishuService struct {
 	createChat      FeishuCreateChatFunc
 	addChatMembers  FeishuAddChatMembersFunc
 	listChatMembers FeishuListChatMembersFunc
+	listChats       FeishuListChatsFunc
 }
 
 func NewFeishuService(apps ...map[string]FeishuAppConfig) *FeishuService {
@@ -84,6 +87,7 @@ func NewFeishuService(apps ...map[string]FeishuAppConfig) *FeishuService {
 		createChat:      defaultFeishuCreateChat,
 		addChatMembers:  defaultFeishuAddChatMembers,
 		listChatMembers: defaultFeishuListChatMembers,
+		listChats:       defaultFeishuListChats,
 	}
 }
 
@@ -95,10 +99,13 @@ func NewFeishuServiceWithCreateChat(apps map[string]FeishuAppConfig, createChat 
 	return svc
 }
 
-func NewFeishuServiceWithCreateChatAndAddMembers(apps map[string]FeishuAppConfig, createChat FeishuCreateChatFunc, addChatMembers FeishuAddChatMembersFunc) *FeishuService {
+func NewFeishuServiceWithCreateChatAndAddMembers(apps map[string]FeishuAppConfig, createChat FeishuCreateChatFunc, addChatMembers FeishuAddChatMembersFunc, listChatMembers ...FeishuListChatMembersFunc) *FeishuService {
 	svc := NewFeishuServiceWithCreateChat(apps, createChat)
 	if addChatMembers != nil {
 		svc.addChatMembers = addChatMembers
+	}
+	if len(listChatMembers) > 0 && listChatMembers[0] != nil {
+		svc.listChatMembers = listChatMembers[0]
 	}
 	return svc
 }
@@ -361,17 +368,94 @@ func defaultFeishuListChatMembers(ctx context.Context, app FeishuAppConfig, chat
 	return members, nil
 }
 
-func (s *FeishuService) ListRooms() []im.Room {
-	// Mock implementation. Real Feishu support should call the external Feishu API.
+func defaultFeishuListChats(ctx context.Context, app FeishuAppConfig) ([]im.Room, error) {
+	client := lark.NewClient(app.AppID, app.AppSecret)
+	rooms := make([]im.Room, 0)
+	pageToken := ""
+
+	for {
+		reqBuilder := larkim.NewListChatReqBuilder().
+			UserIdType("open_id").
+			SortType("ByCreateTimeAsc").
+			PageSize(100)
+		if pageToken != "" {
+			reqBuilder.PageToken(pageToken)
+		}
+
+		resp, err := client.Im.V1.Chat.List(ctx, reqBuilder.Build())
+		if err != nil {
+			return nil, fmt.Errorf("list feishu chats: %w", err)
+		}
+		if !resp.Success() {
+			return nil, fmt.Errorf("list feishu chats: code=%d msg=%s request_id=%s", resp.Code, resp.Msg, resp.RequestId())
+		}
+		if resp.Data == nil {
+			return nil, fmt.Errorf("list feishu chats: empty response data")
+		}
+
+		for _, item := range resp.Data.Items {
+			if item == nil {
+				continue
+			}
+			chatID := strings.TrimSpace(larkcore.StringValue(item.ChatId))
+			if chatID == "" {
+				continue
+			}
+			title := strings.TrimSpace(larkcore.StringValue(item.Name))
+			if title == "" {
+				title = chatID
+			}
+			description := strings.TrimSpace(larkcore.StringValue(item.Description))
+			participants := normalizeNonEmptyStrings([]string{larkcore.StringValue(item.OwnerId)})
+			rooms = append(rooms, im.Room{
+				ID:           chatID,
+				Title:        title,
+				Subtitle:     formatMembers(len(participants)),
+				Description:  description,
+				Participants: participants,
+				Messages:     nil,
+			})
+		}
+
+		if !larkcore.BoolValue(resp.Data.HasMore) {
+			break
+		}
+		pageToken = strings.TrimSpace(larkcore.StringValue(resp.Data.PageToken))
+		if pageToken == "" {
+			break
+		}
+	}
+
+	return rooms, nil
+}
+
+func (s *FeishuService) ListRooms() ([]im.Room, error) {
+	app, err := s.appConfigForRoom("")
+	if err != nil {
+		return nil, err
+	}
+
+	rooms, err := s.listChats(context.Background(), app)
+	if err != nil {
+		return nil, err
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	rooms := make([]im.Room, 0, len(s.rooms))
-	for _, room := range s.rooms {
-		rooms = append(rooms, cloneRoom(*room))
+	for i := range rooms {
+		local, ok := s.rooms[rooms[i].ID]
+		if !ok {
+			continue
+		}
+		if len(rooms[i].Participants) == 0 {
+			rooms[i].Participants = append([]string(nil), local.Participants...)
+			rooms[i].Subtitle = formatMembers(len(rooms[i].Participants))
+		}
+		rooms[i].Messages = append([]im.Message(nil), local.Messages...)
 	}
 	slices.SortFunc(rooms, func(a, b im.Room) int { return strings.Compare(a.Title, b.Title) })
-	return rooms
+	return rooms, nil
 }
 
 func (s *FeishuService) AddRoomMembers(req im.AddRoomMembersRequest) (im.Room, error) {

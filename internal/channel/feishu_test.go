@@ -93,6 +93,50 @@ func TestFeishuCreateRoomUsesManagerAppRegardlessOfCreatorID(t *testing.T) {
 	}
 }
 
+func TestFeishuListRoomsCallsConfiguredApp(t *testing.T) {
+	var gotApp FeishuAppConfig
+	svc := NewFeishuServiceWithCreateChatAndAddMembers(
+		map[string]FeishuAppConfig{"u-manager": {AppID: "cli_manager", AppSecret: "manager-secret", AdminOpenID: "ou_admin"}},
+		func(_ context.Context, _ FeishuAppConfig, req FeishuCreateChatRequest) (FeishuCreateChatResponse, error) {
+			return FeishuCreateChatResponse{ChatID: "oc_alpha", Name: req.Title, Description: req.Description}, nil
+		},
+		func(context.Context, FeishuAppConfig, FeishuAddChatMembersRequest) error { return nil },
+	)
+	svc.listChats = func(_ context.Context, app FeishuAppConfig) ([]im.Room, error) {
+		gotApp = app
+		return []im.Room{
+			{ID: "oc_beta", Title: "beta"},
+			{ID: "oc_alpha", Title: "alpha"},
+		}, nil
+	}
+
+	if _, err := svc.CreateRoom(im.CreateRoomRequest{
+		Title:          "alpha",
+		CreatorID:      "u-manager",
+		ParticipantIDs: []string{"ou_alice"},
+	}); err != nil {
+		t.Fatalf("CreateRoom() error = %v", err)
+	}
+
+	rooms, err := svc.ListRooms()
+	if err != nil {
+		t.Fatalf("ListRooms() error = %v", err)
+	}
+
+	if got, want := gotApp.AppID, "cli_manager"; got != want {
+		t.Fatalf("list rooms app_id = %q, want %q", got, want)
+	}
+	if len(rooms) != 2 {
+		t.Fatalf("rooms len = %d, want 2", len(rooms))
+	}
+	if got, want := rooms[0].ID, "oc_alpha"; got != want {
+		t.Fatalf("first room id = %q, want %q", got, want)
+	}
+	if len(rooms[0].Participants) != 2 || rooms[0].Participants[0] != "u-manager" || rooms[0].Participants[1] != "ou_alice" {
+		t.Fatalf("first room participants = %+v, want local participants", rooms[0].Participants)
+	}
+}
+
 func TestFeishuAddRoomMembersCallsConfiguredApp(t *testing.T) {
 	var gotApp FeishuAppConfig
 	var gotReq FeishuAddChatMembersRequest

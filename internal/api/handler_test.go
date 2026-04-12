@@ -177,6 +177,12 @@ func TestHandleFeishuRoomsMembers(t *testing.T) {
 			}, nil
 		},
 		func(context.Context, channel.FeishuAppConfig, channel.FeishuAddChatMembersRequest) error { return nil },
+		func(context.Context, channel.FeishuAppConfig, string) ([]im.User, error) {
+			return []im.User{
+				{ID: "fsu-admin", Name: "Admin"},
+				{ID: "fsu-alice", Name: "Alice"},
+			}, nil
+		},
 	)
 	if _, err := feishu.CreateUser(channel.FeishuCreateUserRequest{ID: "fsu-admin", Name: "Admin"}); err != nil {
 		t.Fatalf("CreateUser(admin) error = %v", err)
