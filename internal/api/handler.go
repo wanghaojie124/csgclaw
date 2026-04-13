@@ -48,9 +48,10 @@ type imAgentJoinResponse struct {
 }
 
 type createMessageRequest struct {
-	RoomID   string `json:"room_id"`
-	SenderID string `json:"sender_id"`
-	Content  string `json:"content"`
+	RoomID    string `json:"room_id"`
+	SenderID  string `json:"sender_id"`
+	Content   string `json:"content"`
+	MentionID string `json:"mention_id,omitempty"`
 }
 
 type addRoomMembersRequest struct {
@@ -736,9 +737,10 @@ func (r createMessageRequest) toServiceRequest() (im.CreateMessageRequest, error
 	}
 
 	return im.CreateMessageRequest{
-		RoomID:   roomID,
-		SenderID: r.SenderID,
-		Content:  r.Content,
+		RoomID:    roomID,
+		SenderID:  r.SenderID,
+		Content:   r.Content,
+		MentionID: r.MentionID,
 	}, nil
 }
 

@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 	"sync"
@@ -60,6 +62,20 @@ type FeishuListChatMembersFunc func(context.Context, FeishuAppConfig, string) ([
 
 type FeishuListChatsFunc func(context.Context, FeishuAppConfig) ([]im.Room, error)
 
+type FeishuSendMessageRequest struct {
+	ChatID           string
+	Content          string
+	UUID             string
+	MentionID        string
+	MentionAppConfig FeishuAppConfig
+}
+
+type FeishuSendMessageResponse struct {
+	MessageID string
+}
+
+type FeishuSendMessageFunc func(context.Context, FeishuAppConfig, FeishuSendMessageRequest) (FeishuSendMessageResponse, error)
+
 type FeishuService struct {
 	mu              sync.RWMutex
 	users           map[string]im.User
@@ -70,6 +86,7 @@ type FeishuService struct {
 	addChatMembers  FeishuAddChatMembersFunc
 	listChatMembers FeishuListChatMembersFunc
 	listChats       FeishuListChatsFunc
+	sendMessage     FeishuSendMessageFunc
 }
 
 func NewFeishuService(apps ...map[string]FeishuAppConfig) *FeishuService {
@@ -88,6 +105,7 @@ func NewFeishuService(apps ...map[string]FeishuAppConfig) *FeishuService {
 		addChatMembers:  defaultFeishuAddChatMembers,
 		listChatMembers: defaultFeishuListChatMembers,
 		listChats:       defaultFeishuListChats,
+		sendMessage:     defaultFeishuSendMessage,
 	}
 }
 
@@ -106,6 +124,14 @@ func NewFeishuServiceWithCreateChatAndAddMembers(apps map[string]FeishuAppConfig
 	}
 	if len(listChatMembers) > 0 && listChatMembers[0] != nil {
 		svc.listChatMembers = listChatMembers[0]
+	}
+	return svc
+}
+
+func NewFeishuServiceWithSendMessage(apps map[string]FeishuAppConfig, sendMessage FeishuSendMessageFunc) *FeishuService {
+	svc := NewFeishuService(apps)
+	if sendMessage != nil {
+		svc.sendMessage = sendMessage
 	}
 	return svc
 }
@@ -429,6 +455,140 @@ func defaultFeishuListChats(ctx context.Context, app FeishuAppConfig) ([]im.Room
 	return rooms, nil
 }
 
+func defaultFeishuSendMessage(ctx context.Context, app FeishuAppConfig, req FeishuSendMessageRequest) (FeishuSendMessageResponse, error) {
+	text := req.Content
+	mentionID := strings.TrimSpace(req.MentionID)
+	if mentionID != "" {
+		mentionApp, err := validateFeishuAppConfig(req.MentionAppConfig, mentionID)
+		if err != nil {
+			return FeishuSendMessageResponse{}, err
+		}
+		openID, err := fetchBotOpenID(ctx, mentionApp)
+		if err != nil {
+			return FeishuSendMessageResponse{}, err
+		}
+		text = fmt.Sprintf("<at user_id=\"%s\">%s</at> %s", openID, mentionID, req.Content)
+	}
+
+	content, err := json.Marshal(map[string]string{"text": text})
+	if err != nil {
+		return FeishuSendMessageResponse{}, fmt.Errorf("encode feishu message content: %w", err)
+	}
+
+	client := lark.NewClient(app.AppID, app.AppSecret)
+	sendReq := larkim.NewCreateMessageReqBuilder().
+		ReceiveIdType("chat_id").
+		Body(larkim.NewCreateMessageReqBodyBuilder().
+			ReceiveId(req.ChatID).
+			MsgType("text").
+			Content(string(content)).
+			Uuid(req.UUID).
+			Build()).
+		Build()
+
+	resp, err := client.Im.V1.Message.Create(ctx, sendReq)
+	if err != nil {
+		return FeishuSendMessageResponse{}, fmt.Errorf("send feishu message: %w", err)
+	}
+	if !resp.Success() {
+		return FeishuSendMessageResponse{}, fmt.Errorf("send feishu message: code=%d msg=%s request_id=%s", resp.Code, resp.Msg, resp.RequestId())
+	}
+	if resp.Data == nil {
+		return FeishuSendMessageResponse{}, fmt.Errorf("send feishu message: empty response data")
+	}
+	return FeishuSendMessageResponse{MessageID: larkcore.StringValue(resp.Data.MessageId)}, nil
+}
+
+// fetchBotOpenID calls the Feishu bot info API to retrieve and store the bot's open_id.
+func fetchBotOpenID(ctx context.Context, app FeishuAppConfig) (string, error) {
+	client := lark.NewClient(app.AppID, app.AppSecret)
+	resp, err := client.Do(ctx, &larkcore.ApiReq{
+		HttpMethod:                http.MethodGet,
+		ApiPath:                   "/open-apis/bot/v3/info",
+		SupportedAccessTokenTypes: []larkcore.AccessTokenType{larkcore.AccessTokenTypeTenant},
+	})
+	if err != nil {
+		return "", fmt.Errorf("bot info request: %w", err)
+	}
+
+	var result struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+		Bot  struct {
+			OpenID string `json:"open_id"`
+		} `json:"bot"`
+	}
+	if err := json.Unmarshal(resp.RawBody, &result); err != nil {
+		return "", fmt.Errorf("bot info parse: %w", err)
+	}
+	if result.Code != 0 {
+		return "", fmt.Errorf("bot info api error: code=%d msg=%s", result.Code, result.Msg)
+	}
+	if result.Bot.OpenID == "" {
+		return "", fmt.Errorf("bot info: empty open_id")
+	}
+	return result.Bot.OpenID, nil
+}
+
+func (s *FeishuService) SendMessage(req im.CreateMessageRequest) (im.Message, error) {
+	roomID := strings.TrimSpace(req.RoomID)
+	senderID := strings.TrimSpace(req.SenderID)
+	content := strings.TrimSpace(req.Content)
+	if roomID == "" {
+		return im.Message{}, fmt.Errorf("room_id is required")
+	}
+	if senderID == "" {
+		return im.Message{}, fmt.Errorf("sender_id is required")
+	}
+	if content == "" {
+		return im.Message{}, fmt.Errorf("content is required")
+	}
+
+	s.mu.RLock()
+	app, err := s.appConfigForSenderLocked(senderID)
+	mentionID := strings.TrimSpace(req.MentionID)
+	var mentionApp FeishuAppConfig
+	if err == nil && mentionID != "" {
+		mentionApp, err = s.appConfigForMentionLocked(mentionID)
+	}
+	s.mu.RUnlock()
+	if err != nil {
+		return im.Message{}, err
+	}
+
+	fallbackID := fmt.Sprintf("msg-%d", time.Now().UTC().UnixNano())
+	sent, err := s.sendMessage(context.Background(), app, FeishuSendMessageRequest{
+		ChatID:           roomID,
+		Content:          content,
+		UUID:             fallbackID,
+		MentionID:        mentionID,
+		MentionAppConfig: mentionApp,
+	})
+	if err != nil {
+		return im.Message{}, err
+	}
+
+	messageID := strings.TrimSpace(sent.MessageID)
+	if messageID == "" {
+		messageID = fallbackID
+	}
+	message := im.Message{
+		ID:        messageID,
+		SenderID:  senderID,
+		Kind:      im.MessageKindMessage,
+		Content:   content,
+		CreatedAt: time.Now().UTC(),
+		Mentions:  normalizeNonEmptyStrings([]string{mentionID}),
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if room, ok := s.rooms[roomID]; ok {
+		room.Messages = append(room.Messages, message)
+	}
+	return message, nil
+}
+
 func (s *FeishuService) ListRooms() ([]im.Room, error) {
 	app, err := s.appConfigForRoom("")
 	if err != nil {
@@ -609,16 +769,34 @@ func (s *FeishuService) appConfigForCreatorLocked(creatorID string) (FeishuAppCo
 	return s.managerAppConfigLocked()
 }
 
+func (s *FeishuService) appConfigForSenderLocked(senderID string) (FeishuAppConfig, error) {
+	if app, ok := s.apps[senderID]; ok {
+		return validateFeishuAppConfig(app, senderID)
+	}
+	return s.managerAppConfigLocked()
+}
+
+func (s *FeishuService) appConfigForMentionLocked(mention string) (FeishuAppConfig, error) {
+	if app, ok := s.apps[mention]; ok {
+		return validateFeishuAppConfig(app, mention)
+	}
+	return FeishuAppConfig{}, fmt.Errorf("feishu app is not configured for mention %q", mention)
+}
+
 func (s *FeishuService) managerAppConfigLocked() (FeishuAppConfig, error) {
 	app, ok := s.apps[feishuManagerAppUserID]
 	if !ok {
 		return FeishuAppConfig{}, fmt.Errorf("feishu app is not configured for %q", feishuManagerAppUserID)
 	}
+	return validateFeishuAppConfig(app, feishuManagerAppUserID)
+}
+
+func validateFeishuAppConfig(app FeishuAppConfig, ownerID string) (FeishuAppConfig, error) {
 	if strings.TrimSpace(app.AppID) == "" {
-		return FeishuAppConfig{}, fmt.Errorf("feishu app_id is required")
+		return FeishuAppConfig{}, fmt.Errorf("feishu app_id is required for %q", ownerID)
 	}
 	if strings.TrimSpace(app.AppSecret) == "" {
-		return FeishuAppConfig{}, fmt.Errorf("feishu app_secret is required")
+		return FeishuAppConfig{}, fmt.Errorf("feishu app_secret is required for %q", ownerID)
 	}
 	return FeishuAppConfig{
 		AppID:       strings.TrimSpace(app.AppID),

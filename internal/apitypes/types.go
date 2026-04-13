@@ -42,6 +42,13 @@ type Message struct {
 	Mentions  []string      `json:"mentions"`
 }
 
+type CreateMessageRequest struct {
+	RoomID    string `json:"room_id"`
+	SenderID  string `json:"sender_id"`
+	Content   string `json:"content"`
+	MentionID string `json:"mention_id,omitempty"`
+}
+
 type EventPayload struct {
 	Key       string   `json:"key"`
 	ActorID   string   `json:"actor_id,omitempty"`

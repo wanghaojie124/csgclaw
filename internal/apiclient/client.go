@@ -101,6 +101,18 @@ func (c *Client) CreateRoomByChannel(ctx context.Context, channel string, req ap
 	return created, nil
 }
 
+func (c *Client) SendMessageByChannel(ctx context.Context, channel string, req apitypes.CreateMessageRequest) (apitypes.Message, error) {
+	var created apitypes.Message
+	path, err := channelPath(channel, "messages")
+	if err != nil {
+		return apitypes.Message{}, err
+	}
+	if err := c.DoJSON(ctx, http.MethodPost, path, req, &created); err != nil {
+		return apitypes.Message{}, err
+	}
+	return created, nil
+}
+
 func (c *Client) AddRoomMemberByChannel(ctx context.Context, channel string, req apitypes.AddRoomMembersRequest) (apitypes.Room, error) {
 	var updated apitypes.Room
 	path, err := memberCreatePath(channel, req.RoomID)

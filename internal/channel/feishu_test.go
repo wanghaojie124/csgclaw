@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"csgclaw/internal/im"
@@ -69,6 +70,94 @@ func TestFeishuCreateRoomUsesConfiguredAdminOpenID(t *testing.T) {
 
 	if got, want := gotCreatorID, "ou_admin"; got != want {
 		t.Fatalf("create chat creator_id = %q, want %q", got, want)
+	}
+}
+
+func TestFeishuSendMessageUsesSenderAppAndStoresLocalMessage(t *testing.T) {
+	var gotApp FeishuAppConfig
+	var gotReq FeishuSendMessageRequest
+	svc := NewFeishuServiceWithSendMessage(
+		map[string]FeishuAppConfig{"u-manager": {AppID: "cli_manager", AppSecret: "manager-secret"}},
+		func(_ context.Context, app FeishuAppConfig, req FeishuSendMessageRequest) (FeishuSendMessageResponse, error) {
+			gotApp = app
+			gotReq = req
+			return FeishuSendMessageResponse{MessageID: "om_1"}, nil
+		},
+	)
+	svc.rooms["oc_alpha"] = &im.Room{ID: "oc_alpha", Title: "alpha", Participants: []string{"u-manager"}}
+
+	message, err := svc.SendMessage(im.CreateMessageRequest{
+		RoomID:   "oc_alpha",
+		SenderID: "u-manager",
+		Content:  "hello",
+	})
+	if err != nil {
+		t.Fatalf("SendMessage() error = %v", err)
+	}
+
+	if gotApp.AppID != "cli_manager" {
+		t.Fatalf("send app = %+v, want manager app", gotApp)
+	}
+	if gotReq.ChatID != "oc_alpha" || gotReq.Content != "hello" || gotReq.UUID == "" {
+		t.Fatalf("send request = %+v, want chat/content/uuid", gotReq)
+	}
+	if message.ID != "om_1" || message.SenderID != "u-manager" || message.Content != "hello" {
+		t.Fatalf("message = %+v, want sent message", message)
+	}
+	if len(svc.rooms["oc_alpha"].Messages) != 1 || svc.rooms["oc_alpha"].Messages[0].ID != "om_1" {
+		t.Fatalf("stored messages = %+v, want om_1", svc.rooms["oc_alpha"].Messages)
+	}
+}
+
+func TestFeishuSendMessageResolvesMentionApp(t *testing.T) {
+	var gotReq FeishuSendMessageRequest
+	svc := NewFeishuServiceWithSendMessage(
+		map[string]FeishuAppConfig{
+			"u-manager": {AppID: "cli_manager", AppSecret: "manager-secret"},
+			"u-dev":     {AppID: "cli_dev", AppSecret: "dev-secret"},
+		},
+		func(_ context.Context, _ FeishuAppConfig, req FeishuSendMessageRequest) (FeishuSendMessageResponse, error) {
+			gotReq = req
+			return FeishuSendMessageResponse{MessageID: "om_mention"}, nil
+		},
+	)
+	svc.rooms["oc_alpha"] = &im.Room{ID: "oc_alpha", Title: "alpha", Participants: []string{"u-manager", "u-dev"}}
+
+	message, err := svc.SendMessage(im.CreateMessageRequest{
+		RoomID:    "oc_alpha",
+		SenderID:  "u-manager",
+		Content:   "hello",
+		MentionID: "u-dev",
+	})
+	if err != nil {
+		t.Fatalf("SendMessage() error = %v", err)
+	}
+
+	if gotReq.MentionID != "u-dev" || gotReq.MentionAppConfig.AppID != "cli_dev" || gotReq.MentionAppConfig.AppSecret != "dev-secret" {
+		t.Fatalf("send request = %+v, want mention app config", gotReq)
+	}
+	if len(message.Mentions) != 1 || message.Mentions[0] != "u-dev" {
+		t.Fatalf("message mentions = %+v, want u-dev", message.Mentions)
+	}
+}
+
+func TestFeishuSendMessageRequiresMentionApp(t *testing.T) {
+	svc := NewFeishuServiceWithSendMessage(
+		map[string]FeishuAppConfig{"u-manager": {AppID: "cli_manager", AppSecret: "manager-secret"}},
+		func(context.Context, FeishuAppConfig, FeishuSendMessageRequest) (FeishuSendMessageResponse, error) {
+			t.Fatal("sendMessage should not be called without mention app config")
+			return FeishuSendMessageResponse{}, nil
+		},
+	)
+
+	_, err := svc.SendMessage(im.CreateMessageRequest{
+		RoomID:    "oc_alpha",
+		SenderID:  "u-manager",
+		Content:   "hello",
+		MentionID: "u-dev",
+	})
+	if err == nil || !strings.Contains(err.Error(), `feishu app is not configured for mention "u-dev"`) {
+		t.Fatalf("SendMessage() error = %v, want mention app config error", err)
 	}
 }
 

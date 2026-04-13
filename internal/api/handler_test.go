@@ -1263,6 +1263,35 @@ func TestHandleMessagesPostCreatesMessage(t *testing.T) {
 	}
 }
 
+func TestHandleFeishuMessagesPostSendsMessage(t *testing.T) {
+	feishuSvc := channel.NewFeishuServiceWithSendMessage(
+		map[string]channel.FeishuAppConfig{"u-manager": {AppID: "cli_manager", AppSecret: "manager-secret"}},
+		func(_ context.Context, _ channel.FeishuAppConfig, req channel.FeishuSendMessageRequest) (channel.FeishuSendMessageResponse, error) {
+			if req.ChatID != "oc_alpha" || req.Content != "hello" {
+				t.Fatalf("send request = %+v, want chat/content", req)
+			}
+			return channel.FeishuSendMessageResponse{MessageID: "om_1"}, nil
+		},
+	)
+	srv := &Handler{feishu: feishuSvc}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/channels/feishu/messages", strings.NewReader(`{"room_id":"oc_alpha","sender_id":"u-manager","content":"hello"}`))
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	var got im.Message
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.ID != "om_1" || got.SenderID != "u-manager" || got.Content != "hello" {
+		t.Fatalf("message = %+v, want feishu message response", got)
+	}
+}
+
 func TestHandleMessagesPostRequiresRoomID(t *testing.T) {
 	srv := &Handler{im: im.NewService()}
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/messages", strings.NewReader(`{"sender_id":"u-admin","content":"hello"}`))

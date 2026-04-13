@@ -9,9 +9,10 @@ import (
 	"os"
 	"strings"
 
-	"csgclaw/cli/command"
 	"csgclaw/cli/bot"
+	"csgclaw/cli/command"
 	"csgclaw/cli/member"
+	"csgclaw/cli/message"
 	"csgclaw/cli/room"
 	"csgclaw/internal/apiclient"
 	appversion "csgclaw/internal/version"
@@ -59,6 +60,7 @@ func (a *App) registerDefaultCommands() {
 		bot.NewCmd(),
 		room.NewCmd(),
 		member.NewCmd(),
+		message.NewCmd(),
 	)
 }
 
@@ -155,6 +157,7 @@ func (a *App) usage() {
 	fmt.Fprintln(a.stderr, "  csgcli -h")
 	fmt.Fprintln(a.stderr, "  csgcli --version")
 	fmt.Fprintln(a.stderr, "  csgcli bot list --channel feishu")
+	fmt.Fprintln(a.stderr, "  csgcli message --channel feishu --room-id oc_x --sender-id u-manager --content hello")
 	fmt.Fprintln(a.stderr)
 	fmt.Fprintln(a.stderr, "Global flags:")
 	fmt.Fprintln(a.stderr, "  --endpoint string   HTTP server endpoint")

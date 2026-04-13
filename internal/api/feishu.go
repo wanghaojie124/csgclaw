@@ -67,6 +67,29 @@ func (h *Handler) handleFeishuRooms(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *Handler) handleFeishuMessages(w http.ResponseWriter, r *http.Request) {
+	if h.feishu == nil {
+		http.Error(w, "feishu channel is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req apitypes.CreateMessageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf("decode request: %v", err), http.StatusBadRequest)
+		return
+	}
+	message, err := h.feishu.SendMessage(req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusCreated, message)
+}
+
 func (h *Handler) handleFeishuRoomByID(w http.ResponseWriter, r *http.Request) {
 	if h.feishu == nil {
 		http.Error(w, "feishu channel is not configured", http.StatusServiceUnavailable)

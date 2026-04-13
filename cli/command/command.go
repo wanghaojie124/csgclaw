@@ -130,6 +130,17 @@ func RenderUsers(output string, w io.Writer, users []apitypes.User) error {
 	}
 }
 
+func RenderMessages(output string, w io.Writer, messages []apitypes.Message) error {
+	switch output {
+	case "", "table":
+		return RenderMessagesTable(w, messages)
+	case "json":
+		return WriteJSON(w, messages)
+	default:
+		return fmt.Errorf("unsupported output format %q", output)
+	}
+}
+
 func RenderAgentsTable(w io.Writer, agents []agent.Agent) error {
 	tw := NewTableWriter(w)
 	fmt.Fprintln(tw, "ID\tNAME\tROLE\tSTATUS")
@@ -162,6 +173,15 @@ func RenderUsersTable(w io.Writer, users []apitypes.User) error {
 	fmt.Fprintln(tw, "ID\tNAME\tHANDLE\tROLE\tONLINE")
 	for _, user := range users {
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%t\n", user.ID, user.Name, user.Handle, user.Role, user.IsOnline)
+	}
+	return tw.Flush()
+}
+
+func RenderMessagesTable(w io.Writer, messages []apitypes.Message) error {
+	tw := NewTableWriter(w)
+	fmt.Fprintln(tw, "ID\tSENDER\tKIND\tCONTENT")
+	for _, message := range messages {
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", message.ID, message.SenderID, message.Kind, message.Content)
 	}
 	return tw.Flush()
 }

@@ -34,11 +34,7 @@ type Bootstrap struct {
 	InviteDraftUserIDs []string `json:"invite_draft_user_ids,omitempty"`
 }
 
-type CreateMessageRequest struct {
-	RoomID   string `json:"room_id,omitempty"`
-	SenderID string `json:"sender_id"`
-	Content  string `json:"content"`
-}
+type CreateMessageRequest = apitypes.CreateMessageRequest
 
 type DeliverMessageRequest struct {
 	RoomID    string `json:"room_id"`

@@ -32,6 +32,7 @@ func TestExecuteExposesOnlyLiteCommands(t *testing.T) {
 		"bot      Manage bots",
 		"room     Manage IM rooms",
 		"member   Manage IM room members",
+		"message  Send an IM message.",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("usage = %q, want substring %q", got, want)
@@ -117,6 +118,36 @@ func TestExecuteRoomCreateUsesChannelRoute(t *testing.T) {
 		t.Fatalf("Execute() error = %v", err)
 	}
 	assertTableHasRow(t, stdout.String(), "oc_alpha", "alpha", "1", "0")
+}
+
+func TestExecuteMessageUsesChannelRoute(t *testing.T) {
+	var stdout bytes.Buffer
+	app := &App{
+		stdout: &stdout,
+		stderr: &bytes.Buffer{},
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodPost {
+				t.Fatalf("method = %q, want %q", req.Method, http.MethodPost)
+			}
+			if req.URL.String() != "http://example.test/api/v1/channels/feishu/messages" {
+				t.Fatalf("url = %q, want feishu messages route", req.URL.String())
+			}
+			var payload map[string]any
+			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode request: %v", err)
+			}
+			if payload["room_id"] != "oc_alpha" || payload["sender_id"] != "u-manager" || payload["content"] != "hello" {
+				t.Fatalf("payload = %#v, want room/sender/content", payload)
+			}
+			return jsonResponse(http.StatusCreated, `{"id":"om_1","sender_id":"u-manager","kind":"message","content":"hello","created_at":"2026-04-12T09:00:00Z","mentions":[]}`), nil
+		}),
+	}
+
+	err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "message", "--channel", "feishu", "--room-id", "oc_alpha", "--sender-id", "u-manager", "--content", "hello"})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	assertTableHasRow(t, stdout.String(), "om_1", "u-manager", "message", "hello")
 }
 
 func TestExecuteMemberListUsesFeishuDefault(t *testing.T) {

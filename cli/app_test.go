@@ -188,6 +188,68 @@ func TestExecuteBotCreateRequiresNameAndRole(t *testing.T) {
 	}
 }
 
+func TestExecuteMessageSendsToDefaultChannel(t *testing.T) {
+	var stdout bytes.Buffer
+	app := &App{
+		stdout: &stdout,
+		stderr: &bytes.Buffer{},
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodPost {
+				t.Fatalf("method = %q, want %q", req.Method, http.MethodPost)
+			}
+			if req.URL.String() != "http://example.test/api/v1/messages" {
+				t.Fatalf("url = %q, want csgclaw messages route", req.URL.String())
+			}
+			var payload map[string]any
+			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode request: %v", err)
+			}
+			if payload["room_id"] != "room-1" || payload["sender_id"] != "u-admin" || payload["content"] != "hello" {
+				t.Fatalf("payload = %#v, want room/sender/content", payload)
+			}
+			return jsonResponse(http.StatusCreated, `{"id":"msg-1","sender_id":"u-admin","kind":"message","content":"hello","created_at":"2026-04-12T09:00:00Z","mentions":[]}`), nil
+		}),
+	}
+
+	err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "message", "--room-id", "room-1", "--sender-id", "u-admin", "--content", "hello"})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	assertTableHasRow(t, stdout.String(), "msg-1", "u-admin", "message", "hello")
+}
+
+func TestExecuteMessageSendsToFeishuChannel(t *testing.T) {
+	var stdout bytes.Buffer
+	app := &App{
+		stdout: &stdout,
+		stderr: &bytes.Buffer{},
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodPost {
+				t.Fatalf("method = %q, want %q", req.Method, http.MethodPost)
+			}
+			if req.URL.String() != "http://example.test/api/v1/channels/feishu/messages" {
+				t.Fatalf("url = %q, want feishu messages route", req.URL.String())
+			}
+			var payload map[string]any
+			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode request: %v", err)
+			}
+			if payload["room_id"] != "oc_alpha" || payload["sender_id"] != "u-manager" || payload["content"] != "hello" || payload["mention_id"] != "u-dev" {
+				t.Fatalf("payload = %#v, want room/sender/content/mention_id", payload)
+			}
+			return jsonResponse(http.StatusCreated, `{"id":"om_1","sender_id":"u-manager","kind":"message","content":"hello","created_at":"2026-04-12T09:00:00Z","mentions":[]}`), nil
+		}),
+	}
+
+	err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "--output", "json", "message", "--channel", "feishu", "--room-id", "oc_alpha", "--sender-id", "u-manager", "--content", "hello", "--mention-id", "u-dev"})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(stdout.String(), `"id": "om_1"`) || !strings.Contains(stdout.String(), `"sender_id": "u-manager"`) {
+		t.Fatalf("stdout = %q, want JSON message payload", stdout.String())
+	}
+}
+
 func TestRenderAgentsTableAlignsLongColumns(t *testing.T) {
 	var buf bytes.Buffer
 	agents := []agent.Agent{

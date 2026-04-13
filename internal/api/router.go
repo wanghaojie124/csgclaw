@@ -38,4 +38,5 @@ func (h *Handler) registerChannelRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/channels/feishu/users", h.handleFeishuUsers)
 	mux.HandleFunc("/api/v1/channels/feishu/rooms", h.handleFeishuRooms)
 	mux.HandleFunc("/api/v1/channels/feishu/rooms/", h.handleFeishuRoomByID)
+	mux.HandleFunc("/api/v1/channels/feishu/messages", h.handleFeishuMessages)
 }
