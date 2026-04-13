@@ -1,4 +1,4 @@
-package csgcli
+package csgclawcli
 
 import (
 	"context"
@@ -94,7 +94,7 @@ func (a *App) Execute(ctx context.Context, args []string) error {
 }
 
 func (a *App) parseGlobalOptions(args []string) (GlobalOptions, []string, error) {
-	fs := flag.NewFlagSet("csgcli", flag.ContinueOnError)
+	fs := flag.NewFlagSet("csgclaw-cli", flag.ContinueOnError)
 	fs.SetOutput(a.stderr)
 	fs.Usage = a.usage
 
@@ -143,10 +143,10 @@ func consumesValue(arg string) bool {
 
 func (a *App) usage() {
 	a.ensureDefaultCommands()
-	fmt.Fprintln(a.stderr, "csgcli is a lite CSGClaw CLI for bots, rooms, and members.")
+	fmt.Fprintln(a.stderr, "csgclaw-cli is a lite CSGClaw CLI for bots, rooms, and members.")
 	fmt.Fprintln(a.stderr)
 	fmt.Fprintln(a.stderr, "Usage:")
-	fmt.Fprintln(a.stderr, "  csgcli [global-flags] <command> [args]")
+	fmt.Fprintln(a.stderr, "  csgclaw-cli [global-flags] <command> [args]")
 	fmt.Fprintln(a.stderr)
 	fmt.Fprintln(a.stderr, "Available Commands:")
 	for _, cmd := range a.order {
@@ -154,10 +154,10 @@ func (a *App) usage() {
 	}
 	fmt.Fprintln(a.stderr)
 	fmt.Fprintln(a.stderr, "Examples:")
-	fmt.Fprintln(a.stderr, "  csgcli -h")
-	fmt.Fprintln(a.stderr, "  csgcli --version")
-	fmt.Fprintln(a.stderr, "  csgcli bot list --channel feishu")
-	fmt.Fprintln(a.stderr, "  csgcli message --channel feishu --room-id oc_x --sender-id u-manager --content hello")
+	fmt.Fprintln(a.stderr, "  csgclaw-cli -h")
+	fmt.Fprintln(a.stderr, "  csgclaw-cli --version")
+	fmt.Fprintln(a.stderr, "  csgclaw-cli bot list --channel feishu")
+	fmt.Fprintln(a.stderr, "  csgclaw-cli message --channel feishu --room-id oc_x --sender-id u-manager --content hello")
 	fmt.Fprintln(a.stderr)
 	fmt.Fprintln(a.stderr, "Global flags:")
 	fmt.Fprintln(a.stderr, "  --endpoint string   HTTP server endpoint")
@@ -167,7 +167,7 @@ func (a *App) usage() {
 }
 
 func (a *App) printVersion() {
-	fmt.Fprintf(a.stdout, "csgcli version %s\n", appversion.Current())
+	fmt.Fprintf(a.stdout, "csgclaw-cli version %s\n", appversion.Current())
 }
 
 func (a *App) usageCommandGroup(command string, summary string, usageLine string, subcommands []string) {
@@ -179,7 +179,7 @@ func (a *App) usageCommandGroup(command string, summary string, usageLine string
 		fmt.Fprintf(a.stderr, "  %s\n", line)
 	}
 	fmt.Fprintln(a.stderr)
-	fmt.Fprintf(a.stderr, "Run `csgcli %s <subcommand> -h` for subcommand details.\n", command)
+	fmt.Fprintf(a.stderr, "Run `csgclaw-cli %s <subcommand> -h` for subcommand details.\n", command)
 }
 
 func (a *App) newCommandFlagSet(name string, usageLine string, summary string) *flag.FlagSet {
@@ -222,7 +222,7 @@ func (g GlobalOptions) commandOptions() command.GlobalOptions {
 
 func (a *App) commandContext() *command.Context {
 	return &command.Context{
-		Program:    "csgcli",
+		Program:    "csgclaw-cli",
 		Stdout:     a.stdout,
 		Stderr:     a.stderr,
 		HTTPClient: a.httpClient,

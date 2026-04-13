@@ -1,4 +1,4 @@
-package csgcli
+package csgclawcli
 
 import (
 	"bytes"
@@ -173,7 +173,7 @@ func TestExecuteMemberListUsesFeishuDefault(t *testing.T) {
 	assertTableHasRow(t, stdout.String(), "ou_alice", "Alice", "alice", "worker", "true")
 }
 
-func TestExecuteVersionFlagPrintsCsgcliVersion(t *testing.T) {
+func TestExecuteVersionFlagPrintsCsgclawCLIVersion(t *testing.T) {
 	originalVersion := appversion.Version
 	appversion.Version = "1.2.3-test"
 	t.Cleanup(func() { appversion.Version = originalVersion })
@@ -188,7 +188,7 @@ func TestExecuteVersionFlagPrintsCsgcliVersion(t *testing.T) {
 	if err := app.Execute(context.Background(), []string{"--version"}); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if got, want := strings.TrimSpace(stdout.String()), "csgcli version 1.2.3-test"; got != want {
+	if got, want := strings.TrimSpace(stdout.String()), "csgclaw-cli version 1.2.3-test"; got != want {
 		t.Fatalf("stdout = %q, want %q", got, want)
 	}
 }

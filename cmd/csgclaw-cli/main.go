@@ -9,7 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"csgclaw/cli/csgcli"
+	"csgclaw/cli/csgclawcli"
 )
 
 func main() {
@@ -23,7 +23,7 @@ func main() {
 }
 
 func run(args []string) error {
-	app := csgcli.New()
+	app := csgclawcli.New()
 	return executeWithSignalContext(args, app.Execute)
 }
 

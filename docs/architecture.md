@@ -28,7 +28,7 @@ This keeps execution concerns in `agent`, messaging concerns in `im` / `channel`
 
 ```text
 ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-│ csgclaw CLI │   │ csgcli CLI  │   │ Web UI      │
+│ csgclaw CLI │   │ csgclaw-cli │   │ Web UI      │
 └──────┬──────┘   └──────┬──────┘   └──────┬──────┘
        └─────────────────┼─────────────────┘
                          │ HTTP
@@ -56,7 +56,7 @@ The Web UI is served by the local HTTP server and uses the same API surface as t
 
 ## Design Rules
 
-- `cmd/csgclaw` and `cmd/csgcli` stay thin. They should only start their CLI entrypoints.
+- `cmd/csgclaw` and `cmd/csgclaw-cli` stay thin. They should only start their CLI entrypoints.
 - `cli` owns command parsing, HTTP calls, and output formatting.
 - `internal/api` owns HTTP request/response handling only.
 - `internal/bot` owns bot creation and listing. It coordinates `agent` and channel user creation.
@@ -71,10 +71,10 @@ The Web UI is served by the local HTTP server and uses the same API surface as t
 
 ```text
 cmd/csgclaw/            CLI entrypoint
-cmd/csgcli/             lite CLI entrypoint
+cmd/csgclaw-cli/        lite CLI entrypoint
 cli/                    command flows and user-facing output
-cli/csgcli/             csgcli app wiring and global flag handling
-cli/message/            shared message command implementation for csgclaw and csgcli
+cli/csgclawcli/         csgclaw-cli app wiring and global flag handling
+cli/message/            shared message command implementation for csgclaw and csgclaw-cli
 internal/server/        local HTTP server and static UI wiring
 internal/api/           HTTP handlers and route registration
 internal/bot/           bot lifecycle and agent/user binding
@@ -173,7 +173,7 @@ Both CLIs are thin HTTP clients. They should not call stores, BoxLite, or channe
 
 `csgclaw` is the full local management CLI for human operators. It owns onboarding, server lifecycle, agent runtime commands, and the shared bot/room/member/user/message workflows.
 
-`csgcli` is the lightweight CLI primarily intended for agents and scripts. It exposes only the bot, room, member, and message workflows that agents need for collaboration, and does not manage onboarding, the local server lifecycle, or agent runtime directly.
+`csgclaw-cli` is the lightweight CLI primarily intended for agents and scripts. It exposes only the bot, room, member, and message workflows that agents need for collaboration, and does not manage onboarding, the local server lifecycle, or agent runtime directly.
 
 ```text
 csgclaw
@@ -198,7 +198,7 @@ csgclaw
 │   └── list
 └── message
 
-csgcli
+csgclaw-cli
 ├── bot
 │   ├── list
 │   └── create
@@ -216,8 +216,8 @@ csgcli
 ```text
 csgclaw bot list   --channel <csgclaw|feishu>
 csgclaw bot create --channel <csgclaw|feishu>
-csgcli  bot list   --channel <csgclaw|feishu>
-csgcli  bot create --channel <csgclaw|feishu>
+csgclaw-cli bot list   --channel <csgclaw|feishu>
+csgclaw-cli bot create --channel <csgclaw|feishu>
 ```
 
 `--channel` defaults to `csgclaw`.
@@ -228,10 +228,10 @@ Expected behavior:
 - `csgclaw bot list --channel feishu` calls `GET /api/v1/bots?channel=feishu`
 - `csgclaw bot create --channel csgclaw` calls `POST /api/v1/bots`
 - `csgclaw bot create --channel feishu` calls `POST /api/v1/bots`
-- `csgcli bot list --channel csgclaw` calls `GET /api/v1/bots?channel=csgclaw`
-- `csgcli bot list --channel feishu` calls `GET /api/v1/bots?channel=feishu`
-- `csgcli bot create --channel csgclaw` calls `POST /api/v1/bots`
-- `csgcli bot create --channel feishu` calls `POST /api/v1/bots`
+- `csgclaw-cli bot list --channel csgclaw` calls `GET /api/v1/bots?channel=csgclaw`
+- `csgclaw-cli bot list --channel feishu` calls `GET /api/v1/bots?channel=feishu`
+- `csgclaw-cli bot create --channel csgclaw` calls `POST /api/v1/bots`
+- `csgclaw-cli bot create --channel feishu` calls `POST /api/v1/bots`
 
 The selected channel is part of the request payload or query string, not a separate CLI implementation path.
 
@@ -241,15 +241,15 @@ The selected channel is part of the request payload or query string, not a separ
 
 ```text
 csgclaw message --channel <csgclaw|feishu> --room-id <id> --sender-id <id> --content <text> [--mention-id <id>]
-csgcli  message --channel <csgclaw|feishu> --room-id <id> --sender-id <id> --content <text> [--mention-id <id>]
+csgclaw-cli message --channel <csgclaw|feishu> --room-id <id> --sender-id <id> --content <text> [--mention-id <id>]
 ```
 
 Expected behavior:
 
 - `csgclaw message --room-id room-1 --sender-id u-admin --content hello` calls `POST /api/v1/messages`
 - `csgclaw message --channel feishu --room-id oc_alpha --sender-id u-manager --content hello` calls `POST /api/v1/channels/feishu/messages`
-- `csgcli message --room-id room-1 --sender-id u-admin --content hello` calls `POST /api/v1/messages`
-- `csgcli message --channel feishu --room-id oc_alpha --sender-id u-manager --content hello` calls `POST /api/v1/channels/feishu/messages`
+- `csgclaw-cli message --room-id room-1 --sender-id u-admin --content hello` calls `POST /api/v1/messages`
+- `csgclaw-cli message --channel feishu --room-id oc_alpha --sender-id u-manager --content hello` calls `POST /api/v1/channels/feishu/messages`
 
 Validation rules:
 
