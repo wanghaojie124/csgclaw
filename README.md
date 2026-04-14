@@ -60,7 +60,7 @@ api_key = "sk-your-api-key"
 models = ["gpt-5.4"]
 
 [bootstrap]
-manager_image = "ghcr.io/russellluo/picoclaw:2026.4.8.1"
+manager_image = "ghcr.io/russellluo/picoclaw:2026.4.14"
 ```
 
 ### Local Codex via CLIProxyAPI
@@ -80,7 +80,7 @@ api_key = "local"
 models = ["gpt-5.4"]
 
 [bootstrap]
-manager_image = "ghcr.io/russellluo/picoclaw:2026.4.8.1"
+manager_image = "ghcr.io/russellluo/picoclaw:2026.4.14"
 ```
 
 ### Worker Override Example

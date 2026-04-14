@@ -68,7 +68,7 @@ const (
 
 	DefaultHTTPPort     = apiclient.DefaultHTTPPort
 	DefaultAccessToken  = "your_access_token"
-	DefaultManagerImage = "ghcr.io/russellluo/picoclaw:2026.4.8.1"
+	DefaultManagerImage = "ghcr.io/russellluo/picoclaw:2026.4.14"
 )
 
 func DefaultListenAddr() string {
