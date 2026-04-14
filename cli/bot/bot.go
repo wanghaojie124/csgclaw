@@ -38,6 +38,8 @@ func (c cmd) Run(ctx context.Context, run *command.Context, args []string, globa
 		return c.runList(ctx, run, args[1:], globals)
 	case "create":
 		return c.runCreate(ctx, run, args[1:], globals)
+	case "delete":
+		return c.runDelete(ctx, run, args[1:], globals)
 	default:
 		c.usage(run)
 		return fmt.Errorf("unknown bot subcommand %q", args[0])
@@ -48,6 +50,7 @@ func (c cmd) usage(run *command.Context) {
 	run.UsageCommandGroup(c, run.Program+" bot <subcommand> [flags]", []string{
 		"list               List bots",
 		"create             Create a bot",
+		"delete <id>        Delete a bot",
 	})
 }
 
@@ -101,4 +104,19 @@ func (c cmd) runCreate(ctx context.Context, run *command.Context, args []string,
 		return err
 	}
 	return command.RenderBots(globals.Output, run.Stdout, []apitypes.Bot{created})
+}
+
+func (c cmd) runDelete(ctx context.Context, run *command.Context, args []string, globals command.GlobalOptions) error {
+	fs := run.NewFlagSet("bot delete", run.Program+" bot delete <id> [flags]", "Delete a bot.")
+	channelName := fs.String("channel", "csgclaw", "channel name: csgclaw or feishu")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	rest := fs.Args()
+	if len(rest) != 1 {
+		return fmt.Errorf("bot delete requires exactly one id")
+	}
+
+	return run.APIClient(globals).DeleteBot(ctx, *channelName, rest[0])
 }

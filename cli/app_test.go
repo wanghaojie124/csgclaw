@@ -170,6 +170,46 @@ func TestExecuteBotCreateFeishuSendsChannelPayload(t *testing.T) {
 	}
 }
 
+func TestExecuteBotDeleteUsesDefaultChannel(t *testing.T) {
+	app := &App{
+		stdout: &bytes.Buffer{},
+		stderr: &bytes.Buffer{},
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodDelete {
+				t.Fatalf("method = %q, want %q", req.Method, http.MethodDelete)
+			}
+			if req.URL.String() != "http://example.test/api/v1/bots/u-alice?channel=csgclaw" {
+				t.Fatalf("url = %q, want csgclaw bot delete route", req.URL.String())
+			}
+			return jsonResponse(http.StatusNoContent, ``), nil
+		}),
+	}
+
+	if err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "bot", "delete", "u-alice"}); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+}
+
+func TestExecuteBotDeleteFeishuUsesChannelQuery(t *testing.T) {
+	app := &App{
+		stdout: &bytes.Buffer{},
+		stderr: &bytes.Buffer{},
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodDelete {
+				t.Fatalf("method = %q, want %q", req.Method, http.MethodDelete)
+			}
+			if req.URL.String() != "http://example.test/api/v1/bots/u-alice?channel=feishu" {
+				t.Fatalf("url = %q, want feishu bot delete route", req.URL.String())
+			}
+			return jsonResponse(http.StatusNoContent, ``), nil
+		}),
+	}
+
+	if err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "bot", "delete", "--channel", "feishu", "u-alice"}); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+}
+
 func TestExecuteBotCreateRequiresNameAndRole(t *testing.T) {
 	app := &App{
 		stdout:     &bytes.Buffer{},
@@ -833,6 +873,7 @@ func TestBotHelpIncludesSubcommands(t *testing.T) {
 		"csgclaw bot <subcommand> [flags]",
 		"list               List bots",
 		"create             Create a bot",
+		"delete <id>        Delete a bot",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("help = %q, want substring %q", got, want)

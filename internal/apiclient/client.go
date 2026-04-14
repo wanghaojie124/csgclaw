@@ -69,6 +69,18 @@ func (c *Client) CreateBot(ctx context.Context, req apitypes.CreateBotRequest) (
 	return created, nil
 }
 
+func (c *Client) DeleteBot(ctx context.Context, channel, id string) error {
+	values := url.Values{}
+	if strings.TrimSpace(channel) != "" {
+		values.Set("channel", strings.TrimSpace(channel))
+	}
+	path := "/api/v1/bots/" + url.PathEscape(id)
+	if encoded := values.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	return c.DoNoContent(ctx, http.MethodDelete, path)
+}
+
 func (c *Client) ListRooms(ctx context.Context) ([]apitypes.Room, error) {
 	return c.ListRoomsByChannel(ctx, "csgclaw")
 }

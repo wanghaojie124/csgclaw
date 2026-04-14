@@ -90,6 +90,27 @@ func TestExecuteBotListUsesAPIClient(t *testing.T) {
 	}
 }
 
+func TestExecuteBotDeleteUsesAPIClient(t *testing.T) {
+	app := &App{
+		stdout: &bytes.Buffer{},
+		stderr: &bytes.Buffer{},
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodDelete {
+				t.Fatalf("method = %q, want %q", req.Method, http.MethodDelete)
+			}
+			if req.URL.String() != "http://example.test/api/v1/bots/u-alice?channel=feishu" {
+				t.Fatalf("url = %q, want feishu bot delete route", req.URL.String())
+			}
+			return jsonResponse(http.StatusNoContent, ``), nil
+		}),
+	}
+
+	err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "bot", "delete", "--channel", "feishu", "u-alice"})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+}
+
 func TestExecuteRoomCreateUsesChannelRoute(t *testing.T) {
 	var stdout bytes.Buffer
 	app := &App{

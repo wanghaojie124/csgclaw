@@ -598,6 +598,51 @@ func TestHandleBotsListRejectsUnsupportedMethod(t *testing.T) {
 	}
 }
 
+func TestHandleBotByIDDeleteUsesChannel(t *testing.T) {
+	srv := &Handler{botSvc: mustNewBotService(t, []bot.Bot{
+		{
+			ID:        "u-alice",
+			Name:      "Alice",
+			Role:      string(bot.RoleWorker),
+			Channel:   string(bot.ChannelCSGClaw),
+			AgentID:   "u-alice",
+			UserID:    "u-alice",
+			CreatedAt: time.Date(2026, 4, 12, 9, 0, 0, 0, time.UTC),
+		},
+		{
+			ID:        "u-alice",
+			Name:      "Alice",
+			Role:      string(bot.RoleWorker),
+			Channel:   string(bot.ChannelFeishu),
+			AgentID:   "u-alice",
+			UserID:    "u-alice",
+			CreatedAt: time.Date(2026, 4, 12, 10, 0, 0, 0, time.UTC),
+		},
+	})}
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/bots/u-alice?channel=feishu", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusNoContent, rec.Body.String())
+	}
+	bots, err := srv.botSvc.List(string(bot.ChannelCSGClaw))
+	if err != nil {
+		t.Fatalf("List(csgclaw) error = %v", err)
+	}
+	if len(bots) != 1 || bots[0].ID != "u-alice" {
+		t.Fatalf("csgclaw bots = %+v, want retained u-alice", bots)
+	}
+	bots, err = srv.botSvc.List(string(bot.ChannelFeishu))
+	if err != nil {
+		t.Fatalf("List(feishu) error = %v", err)
+	}
+	if len(bots) != 0 {
+		t.Fatalf("feishu bots = %+v, want deleted", bots)
+	}
+}
+
 func TestHandleAgentsListReturnsUnifiedAgents(t *testing.T) {
 	svc := mustNewSeededService(t, []agent.Agent{
 		{ID: "u-manager", Name: "manager", Role: agent.RoleManager, CreatedAt: time.Date(2026, 3, 28, 9, 0, 0, 0, time.UTC)},

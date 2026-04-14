@@ -68,6 +68,45 @@ func (s *Service) List(channel string) ([]Bot, error) {
 	return filtered, nil
 }
 
+func (s *Service) Delete(ctx context.Context, channel, id string) error {
+	if s == nil || s.store == nil {
+		return fmt.Errorf("bot store is required")
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return fmt.Errorf("bot id is required")
+	}
+	if strings.TrimSpace(channel) == "" {
+		channel = string(ChannelCSGClaw)
+	}
+	deleted, ok, err := s.store.DeleteByChannelID(channel, id)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("bot %q not found", id)
+	}
+	if s.agents == nil {
+		return nil
+	}
+	if strings.TrimSpace(deleted.Role) != string(RoleWorker) {
+		return nil
+	}
+	agentID := strings.TrimSpace(deleted.AgentID)
+	if agentID == "" {
+		return nil
+	}
+	for _, b := range s.store.List() {
+		if strings.TrimSpace(b.AgentID) == agentID {
+			return nil
+		}
+	}
+	if err := s.agents.Delete(ctx, agentID); err != nil {
+		return fmt.Errorf("delete backing agent %q: %w", agentID, err)
+	}
+	return nil
+}
+
 func (s *Service) Create(ctx context.Context, req CreateRequest) (Bot, error) {
 	if s == nil || s.store == nil {
 		return Bot{}, fmt.Errorf("bot store is required")

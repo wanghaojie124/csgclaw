@@ -146,6 +146,30 @@ func (h *Handler) handleBots(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *Handler) handleBotByID(w http.ResponseWriter, r *http.Request) {
+	if h.botSvc == nil {
+		http.Error(w, "bot service is not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	id := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/api/v1/bots/"))
+	if id == "" || strings.Contains(id, "/") {
+		http.NotFound(w, r)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodDelete:
+		if err := h.botSvc.Delete(r.Context(), r.URL.Query().Get("channel"), id); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 func (h *Handler) handleAgents(w http.ResponseWriter, r *http.Request) {
 	if h.svc == nil {
 		http.Error(w, "agent service is not configured", http.StatusServiceUnavailable)

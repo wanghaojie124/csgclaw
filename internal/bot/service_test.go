@@ -83,6 +83,89 @@ func TestServiceListRejectsInvalidChannel(t *testing.T) {
 	}
 }
 
+func TestServiceDeleteRemovesBotForChannel(t *testing.T) {
+	svc := mustNewBotService(t, []Bot{
+		{
+			ID:        "u-alice",
+			Name:      "Alice",
+			Role:      string(RoleWorker),
+			Channel:   string(ChannelCSGClaw),
+			AgentID:   "u-alice",
+			UserID:    "u-alice",
+			CreatedAt: time.Date(2026, 4, 12, 9, 0, 0, 0, time.UTC),
+		},
+		{
+			ID:        "u-alice",
+			Name:      "Alice",
+			Role:      string(RoleWorker),
+			Channel:   string(ChannelFeishu),
+			AgentID:   "u-alice",
+			UserID:    "u-alice",
+			CreatedAt: time.Date(2026, 4, 12, 10, 0, 0, 0, time.UTC),
+		},
+	})
+
+	if err := svc.Delete(context.Background(), "feishu", "u-alice"); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	feishuBots, err := svc.List("feishu")
+	if err != nil {
+		t.Fatalf("List(feishu) error = %v", err)
+	}
+	if len(feishuBots) != 0 {
+		t.Fatalf("List(feishu) = %+v, want deleted", feishuBots)
+	}
+	csgclawBots, err := svc.List("csgclaw")
+	if err != nil {
+		t.Fatalf("List(csgclaw) error = %v", err)
+	}
+	if len(csgclawBots) != 1 || csgclawBots[0].ID != "u-alice" {
+		t.Fatalf("List(csgclaw) = %+v, want retained u-alice", csgclawBots)
+	}
+}
+
+func TestServiceDeleteRemovesBackingAgentWhenLastReference(t *testing.T) {
+	agent.SetTestHooks(
+		func(_ *agent.Service, _ string) (*boxlite.Runtime, error) { return nil, nil },
+		nil,
+	)
+	defer agent.ResetTestHooks()
+
+	agentSvc := mustNewSeededAgentService(t, []agent.Agent{
+		{
+			ID:        "u-alice",
+			Name:      "alice",
+			Role:      agent.RoleWorker,
+			CreatedAt: time.Date(2026, 4, 12, 9, 0, 0, 0, time.UTC),
+		},
+	})
+	store, err := NewMemoryStore([]Bot{
+		{
+			ID:        "u-alice",
+			Name:      "Alice",
+			Role:      string(RoleWorker),
+			Channel:   string(ChannelFeishu),
+			AgentID:   "u-alice",
+			UserID:    "u-alice",
+			CreatedAt: time.Date(2026, 4, 12, 10, 0, 0, 0, time.UTC),
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewMemoryStore() error = %v", err)
+	}
+	svc, err := NewServiceWithDependencies(store, agentSvc, nil)
+	if err != nil {
+		t.Fatalf("NewServiceWithDependencies() error = %v", err)
+	}
+
+	if err := svc.Delete(context.Background(), "feishu", "u-alice"); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	if _, ok := agentSvc.Agent("u-alice"); ok {
+		t.Fatal("Agent() ok = true, want false after deleting last bot reference")
+	}
+}
+
 func TestNewServiceRequiresStore(t *testing.T) {
 	_, err := NewService(nil)
 	if err == nil || !strings.Contains(err.Error(), "bot store is required") {
@@ -225,7 +308,7 @@ func TestServiceCreateWorkerReusesAgentAcrossChannels(t *testing.T) {
 	createCalls := 0
 	agent.SetTestHooks(
 		func(_ *agent.Service, _ string) (*boxlite.Runtime, error) { return nil, nil },
-		func(_ *agent.Service, _ context.Context, _ *boxlite.Runtime, _ string, name, botID, _ string) (*boxlite.Box, *boxlite.BoxInfo, error) {
+		func(_ *agent.Service, _ context.Context, _ *boxlite.Runtime, _ string, name, botID string, _ config.ModelConfig) (*boxlite.Box, *boxlite.BoxInfo, error) {
 			createCalls++
 			if name != "alice" {
 				t.Fatalf("create gateway name = %q, want alice", name)

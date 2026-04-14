@@ -156,6 +156,45 @@ func TestStoreAllowsSameBotIDAcrossChannels(t *testing.T) {
 	}
 }
 
+func TestStoreDeleteByChannelIDRemovesOnlyMatchingChannel(t *testing.T) {
+	store, err := NewMemoryStore(nil)
+	if err != nil {
+		t.Fatalf("NewMemoryStore() error = %v", err)
+	}
+
+	csgclawBot := Bot{
+		ID:        "u-alice",
+		Name:      "Alice",
+		Role:      string(RoleWorker),
+		Channel:   string(ChannelCSGClaw),
+		AgentID:   "u-alice",
+		UserID:    "u-alice",
+		CreatedAt: time.Date(2026, 4, 12, 9, 0, 0, 0, time.UTC),
+	}
+	feishuBot := csgclawBot
+	feishuBot.Channel = string(ChannelFeishu)
+	if err := store.Save(csgclawBot); err != nil {
+		t.Fatalf("Save(csgclaw) error = %v", err)
+	}
+	if err := store.Save(feishuBot); err != nil {
+		t.Fatalf("Save(feishu) error = %v", err)
+	}
+
+	deleted, ok, err := store.DeleteByChannelID("feishu", "u-alice")
+	if err != nil {
+		t.Fatalf("DeleteByChannelID() error = %v", err)
+	}
+	if !ok || deleted.Channel != string(ChannelFeishu) {
+		t.Fatalf("DeleteByChannelID() = %+v, %v; want feishu bot", deleted, ok)
+	}
+	if _, ok, err := store.GetByChannelID(string(ChannelFeishu), "u-alice"); err != nil || ok {
+		t.Fatalf("GetByChannelID(feishu) = ok %v err %v, want deleted", ok, err)
+	}
+	if _, ok, err := store.GetByChannelID(string(ChannelCSGClaw), "u-alice"); err != nil || !ok {
+		t.Fatalf("GetByChannelID(csgclaw) = ok %v err %v, want retained", ok, err)
+	}
+}
+
 func TestStoreSaveRejectsInvalidBot(t *testing.T) {
 	store, err := NewStore("")
 	if err != nil {

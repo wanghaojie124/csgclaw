@@ -88,6 +88,25 @@ func (s *Store) Save(b Bot) error {
 	return s.saveLocked()
 }
 
+func (s *Store) DeleteByChannelID(channel, id string) (Bot, bool, error) {
+	normalizedChannel, err := NormalizeChannel(channel)
+	if err != nil {
+		return Bot{}, false, err
+	}
+	key := botStoreKeyParts(string(normalizedChannel), strings.TrimSpace(id))
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	b, ok := s.items[key]
+	if !ok {
+		return Bot{}, false, nil
+	}
+	delete(s.items, key)
+	if err := s.saveLocked(); err != nil {
+		return Bot{}, false, err
+	}
+	return b, true, nil
+}
+
 func (s *Store) Reload() error {
 	items, err := s.readState()
 	if err != nil {
