@@ -284,14 +284,15 @@ func (s *Service) createWorker(ctx context.Context, normalized CreateRequest) (B
 		createdAt = time.Now().UTC()
 	}
 	b := Bot{
-		ID:        created.ID,
-		Name:      created.Name,
-		Role:      string(RoleWorker),
-		Channel:   normalized.Channel,
-		AgentID:   created.ID,
-		UserID:    userID,
-		Available: true,
-		CreatedAt: createdAt,
+		ID:          created.ID,
+		Name:        created.Name,
+		Description: normalized.Description,
+		Role:        string(RoleWorker),
+		Channel:     normalized.Channel,
+		AgentID:     created.ID,
+		UserID:      userID,
+		Available:   true,
+		CreatedAt:   createdAt,
 	}
 	if _, ok, err := s.store.GetByChannelID(b.Channel, b.ID); err != nil {
 		return Bot{}, err
@@ -334,14 +335,15 @@ func (s *Service) createManager(ctx context.Context, normalized CreateRequest, f
 		createdAt = time.Now().UTC()
 	}
 	b := Bot{
-		ID:        manager.ID,
-		Name:      normalized.Name,
-		Role:      string(RoleManager),
-		Channel:   normalized.Channel,
-		AgentID:   manager.ID,
-		UserID:    userID,
-		Available: true,
-		CreatedAt: createdAt,
+		ID:          manager.ID,
+		Name:        normalized.Name,
+		Description: normalized.Description,
+		Role:        string(RoleManager),
+		Channel:     normalized.Channel,
+		AgentID:     manager.ID,
+		UserID:      userID,
+		Available:   true,
+		CreatedAt:   createdAt,
 	}
 	if _, ok, err := s.store.GetByChannelID(b.Channel, b.ID); err != nil {
 		return Bot{}, err

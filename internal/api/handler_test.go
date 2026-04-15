@@ -462,7 +462,7 @@ func TestHandleBotsCreateCSGClawWorker(t *testing.T) {
 		im:     imSvc,
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/bots", strings.NewReader(`{"name":"alice","role":"worker","channel":"csgclaw"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/bots", strings.NewReader(`{"name":"alice","description":"test lead","role":"worker","channel":"csgclaw"}`))
 	rec := httptest.NewRecorder()
 
 	srv.Routes().ServeHTTP(rec, req)
@@ -477,6 +477,9 @@ func TestHandleBotsCreateCSGClawWorker(t *testing.T) {
 	if created.ID != "u-alice" || created.AgentID != "u-alice" || created.UserID != "u-alice" {
 		t.Fatalf("created bot = %+v, want u-alice IDs", created)
 	}
+	if created.Description != "test lead" {
+		t.Fatalf("created bot description = %q, want test lead", created.Description)
+	}
 
 	rec = httptest.NewRecorder()
 	srv.Routes().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/bots?channel=csgclaw", nil))
@@ -489,6 +492,9 @@ func TestHandleBotsCreateCSGClawWorker(t *testing.T) {
 	}
 	if len(bots) != 1 || bots[0].ID != "u-alice" {
 		t.Fatalf("bots = %+v, want u-alice", bots)
+	}
+	if bots[0].Description != "test lead" {
+		t.Fatalf("bots[0].Description = %q, want test lead", bots[0].Description)
 	}
 
 	rec = httptest.NewRecorder()

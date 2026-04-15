@@ -56,6 +56,7 @@ func ValidateCreateRequest(req CreateRequest) error {
 func NormalizeBot(b Bot) (Bot, error) {
 	b.ID = strings.TrimSpace(b.ID)
 	b.Name = strings.TrimSpace(b.Name)
+	b.Description = strings.TrimSpace(b.Description)
 	b.AgentID = strings.TrimSpace(b.AgentID)
 	b.UserID = strings.TrimSpace(b.UserID)
 	if b.ID == "" {

@@ -131,7 +131,7 @@ func TestExecuteBotListUsesDefaultChannel(t *testing.T) {
 	if err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "bot", "list"}); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	assertTableHasRow(t, stdout.String(), "bot-alice", "alice", "worker", "csgclaw", "u-alice", "u-alice", "true")
+	assertTableHasRow(t, stdout.String(), "bot-alice", "alice", "-", "worker", "csgclaw", "u-alice", "u-alice", "true")
 }
 
 func TestExecuteBotListFeishuUsesChannelQuery(t *testing.T) {
@@ -170,14 +170,14 @@ func TestExecuteBotListUsesRoleQuery(t *testing.T) {
 			if req.URL.String() != "http://example.test/api/v1/bots?channel=csgclaw&role=worker" {
 				t.Fatalf("url = %q, want role-filtered bot list route", req.URL.String())
 			}
-			return jsonResponse(http.StatusOK, `[{"id":"bot-alice","name":"alice","role":"worker","channel":"csgclaw","agent_id":"u-alice","user_id":"u-alice","available":true,"created_at":"2026-04-12T09:00:00Z"}]`), nil
+			return jsonResponse(http.StatusOK, `[{"id":"bot-alice","name":"alice","description":"abcdefghijklmnopqrstuvwxyz1234567890ABCDE","role":"worker","channel":"csgclaw","agent_id":"u-alice","user_id":"u-alice","available":true,"created_at":"2026-04-12T09:00:00Z"}]`), nil
 		}),
 	}
 
 	if err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "bot", "list", "--role", "worker"}); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	assertTableHasRow(t, stdout.String(), "bot-alice", "alice", "worker", "csgclaw", "u-alice", "u-alice", "true")
+	assertTableHasRow(t, stdout.String(), "bot-alice", "alice", "abcdefghijklmnopqrstuvwxyz1234567890ABCD...", "worker", "csgclaw", "u-alice", "u-alice", "true")
 }
 
 func TestExecuteBotCreateUsesDefaultChannel(t *testing.T) {
@@ -202,7 +202,7 @@ func TestExecuteBotCreateUsesDefaultChannel(t *testing.T) {
 			if payload.Description != "test lead" || payload.ModelID != "gpt-test" {
 				t.Fatalf("payload = %+v, want description/model_id", payload)
 			}
-			return jsonResponse(http.StatusCreated, `{"id":"u-alice","name":"alice","role":"worker","channel":"csgclaw","agent_id":"u-alice","user_id":"u-alice","available":true,"created_at":"2026-04-12T09:00:00Z"}`), nil
+			return jsonResponse(http.StatusCreated, `{"id":"u-alice","name":"alice","description":"test-lead","role":"worker","channel":"csgclaw","agent_id":"u-alice","user_id":"u-alice","available":true,"created_at":"2026-04-12T09:00:00Z"}`), nil
 		}),
 	}
 
@@ -210,7 +210,7 @@ func TestExecuteBotCreateUsesDefaultChannel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	assertTableHasRow(t, stdout.String(), "u-alice", "alice", "worker", "csgclaw", "u-alice", "u-alice", "true")
+	assertTableHasRow(t, stdout.String(), "u-alice", "alice", "test-lead", "worker", "csgclaw", "u-alice", "u-alice", "true")
 }
 
 func TestExecuteBotCreateFeishuSendsChannelPayload(t *testing.T) {

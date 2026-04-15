@@ -423,6 +423,9 @@ func TestServiceCreateCSGClawWorkerCreatesAgentUserAndBot(t *testing.T) {
 	if got.Role != string(RoleWorker) || got.Channel != string(ChannelCSGClaw) {
 		t.Fatalf("Create() = %+v, want worker csgclaw", got)
 	}
+	if got.Description != "test lead" {
+		t.Fatalf("Create().Description = %q, want test lead", got.Description)
+	}
 	if _, ok := agentSvc.Agent("u-alice"); !ok {
 		t.Fatal("agent u-alice not created")
 	}
@@ -436,6 +439,9 @@ func TestServiceCreateCSGClawWorkerCreatesAgentUserAndBot(t *testing.T) {
 	}
 	if len(listed) != 1 || listed[0].ID != "u-alice" {
 		t.Fatalf("List(csgclaw) = %+v, want u-alice", listed)
+	}
+	if listed[0].Description != "test lead" {
+		t.Fatalf("List(csgclaw)[0].Description = %q, want test lead", listed[0].Description)
 	}
 }
 

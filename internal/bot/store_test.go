@@ -10,14 +10,18 @@ import (
 
 func TestNormalizeCreateRequestDefaultsChannel(t *testing.T) {
 	got, err := NormalizeCreateRequest(CreateRequest{
-		Name: " Alice ",
-		Role: " WORKER ",
+		Name:        " Alice ",
+		Description: " test lead ",
+		Role:        " WORKER ",
 	})
 	if err != nil {
 		t.Fatalf("NormalizeCreateRequest() error = %v", err)
 	}
 	if got.Name != "Alice" {
 		t.Fatalf("Name = %q, want %q", got.Name, "Alice")
+	}
+	if got.Description != "test lead" {
+		t.Fatalf("Description = %q, want %q", got.Description, "test lead")
 	}
 	if got.Role != string(RoleWorker) {
 		t.Fatalf("Role = %q, want %q", got.Role, RoleWorker)
@@ -70,13 +74,14 @@ func TestStoreSaveListAndReload(t *testing.T) {
 	}
 
 	first := Bot{
-		ID:        "bot-2",
-		Name:      "Bob",
-		Role:      "WORKER",
-		Channel:   "FEISHU",
-		AgentID:   "agent-2",
-		UserID:    "user-2",
-		CreatedAt: time.Date(2026, 4, 12, 10, 0, 0, 0, time.UTC),
+		ID:          "bot-2",
+		Name:        "Bob",
+		Description: " handles deployments ",
+		Role:        "WORKER",
+		Channel:     "FEISHU",
+		AgentID:     "agent-2",
+		UserID:      "user-2",
+		CreatedAt:   time.Date(2026, 4, 12, 10, 0, 0, 0, time.UTC),
 	}
 	second := Bot{
 		ID:        "bot-1",
@@ -117,6 +122,9 @@ func TestStoreSaveListAndReload(t *testing.T) {
 	}
 	if loaded.Role != string(RoleWorker) || loaded.Channel != string(ChannelFeishu) {
 		t.Fatalf("Get(bot-2) = %+v, want normalized worker/feishu", loaded)
+	}
+	if loaded.Description != "handles deployments" {
+		t.Fatalf("Get(bot-2).Description = %q, want trimmed description", loaded.Description)
 	}
 }
 

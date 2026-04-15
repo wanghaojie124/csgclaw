@@ -3,14 +3,15 @@ package apitypes
 import "time"
 
 type Bot struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Role      string    `json:"role"`
-	Channel   string    `json:"channel"`
-	AgentID   string    `json:"agent_id"`
-	UserID    string    `json:"user_id"`
-	Available bool      `json:"available"`
-	CreatedAt time.Time `json:"created_at"`
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
+	Role        string    `json:"role"`
+	Channel     string    `json:"channel"`
+	AgentID     string    `json:"agent_id"`
+	UserID      string    `json:"user_id"`
+	Available   bool      `json:"available"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type CreateBotRequest struct {

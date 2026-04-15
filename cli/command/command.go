@@ -159,11 +159,26 @@ func displayAgentProfile(profile string) string {
 
 func RenderBotsTable(w io.Writer, bots []apitypes.Bot) error {
 	tw := NewTableWriter(w)
-	fmt.Fprintln(tw, "ID\tNAME\tROLE\tCHANNEL\tAGENT\tUSER\tAVAILABLE")
+	fmt.Fprintln(tw, "ID\tNAME\tDESCRIPTION\tROLE\tCHANNEL\tAGENT\tUSER\tAVAILABLE")
 	for _, b := range bots {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%t\n", b.ID, b.Name, b.Role, b.Channel, displayBotField(b.AgentID), displayBotField(b.UserID), b.Available)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%t\n", b.ID, b.Name, displayBotDescription(b.Description), b.Role, b.Channel, displayBotField(b.AgentID), displayBotField(b.UserID), b.Available)
 	}
 	return tw.Flush()
+}
+
+func displayBotDescription(value string) string {
+	const maxRunes = 40
+
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "-"
+	}
+
+	runes := []rune(value)
+	if len(runes) <= maxRunes {
+		return value
+	}
+	return string(runes[:maxRunes]) + "..."
 }
 
 func displayBotField(value string) string {
