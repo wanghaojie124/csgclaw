@@ -119,5 +119,15 @@ func (c cmd) runDelete(ctx context.Context, run *command.Context, args []string,
 		return fmt.Errorf("bot delete requires exactly one id")
 	}
 
-	return run.APIClient(globals).DeleteBot(ctx, *channelName, rest[0])
+	if err := run.APIClient(globals).DeleteBot(ctx, *channelName, rest[0]); err != nil {
+		return err
+	}
+	return command.RenderAction(globals.Output, run.Stdout, command.ActionResult{
+		Command: "bot",
+		Action:  "delete",
+		Status:  "deleted",
+		ID:      rest[0],
+		Channel: *channelName,
+		Message: fmt.Sprintf("deleted %s bot %s", *channelName, rest[0]),
+	})
 }

@@ -115,7 +115,7 @@ func TestServeForegroundPassesContextToServer(t *testing.T) {
 		},
 	}
 
-	if err := serveForeground(ctx, run, cfg); err != nil {
+	if err := serveForeground(ctx, run, cfg, "table"); err != nil {
 		t.Fatalf("serveForeground() error = %v", err)
 	}
 	if !called {

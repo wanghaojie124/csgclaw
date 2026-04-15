@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -120,7 +121,16 @@ func (c cmd) runDelete(ctx context.Context, run *command.Context, args []string,
 		return fmt.Errorf("agent delete requires exactly one id")
 	}
 
-	return run.APIClient(globals).DoNoContent(ctx, http.MethodDelete, "/api/v1/agents/"+rest[0])
+	if err := run.APIClient(globals).DoNoContent(ctx, http.MethodDelete, "/api/v1/agents/"+rest[0]); err != nil {
+		return err
+	}
+	return command.RenderAction(globals.Output, run.Stdout, command.ActionResult{
+		Command: "agent",
+		Action:  "delete",
+		Status:  "deleted",
+		ID:      rest[0],
+		Message: fmt.Sprintf("deleted agent %s", rest[0]),
+	})
 }
 
 func (c cmd) runLogs(ctx context.Context, run *command.Context, args []string, globals command.GlobalOptions) error {
@@ -144,6 +154,24 @@ func (c cmd) runLogs(ctx context.Context, run *command.Context, args []string, g
 		values.Set("follow", "true")
 	}
 	apiclient.QueryInt(values, "lines", *lines)
+	if globals.Output == "json" {
+		if *follow {
+			return fmt.Errorf("agent logs does not support --output json with --follow")
+		}
+		var buf bytes.Buffer
+		if err := run.APIClient(globals).Stream(ctx, "/api/v1/agents/"+rest[0]+"/logs", values, &buf); err != nil {
+			return err
+		}
+		return command.RenderAction(globals.Output, run.Stdout, command.ActionResult{
+			Command: "agent",
+			Action:  "logs",
+			Status:  "ok",
+			ID:      rest[0],
+			Logs:    buf.String(),
+			Lines:   *lines,
+			Follow:  false,
+		})
+	}
 	return run.APIClient(globals).Stream(ctx, "/api/v1/agents/"+rest[0]+"/logs", values, run.Stdout)
 }
 

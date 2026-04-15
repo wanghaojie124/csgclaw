@@ -116,5 +116,14 @@ func (c cmd) runKick(ctx context.Context, run *command.Context, args []string, g
 		return fmt.Errorf("user kick requires exactly one id")
 	}
 
-	return run.APIClient(globals).DoNoContent(ctx, http.MethodDelete, "/api/v1/users/"+rest[0])
+	if err := run.APIClient(globals).DoNoContent(ctx, http.MethodDelete, "/api/v1/users/"+rest[0]); err != nil {
+		return err
+	}
+	return command.RenderAction(globals.Output, run.Stdout, command.ActionResult{
+		Command: "user",
+		Action:  "kick",
+		Status:  "removed",
+		ID:      rest[0],
+		Message: fmt.Sprintf("removed user %s", rest[0]),
+	})
 }

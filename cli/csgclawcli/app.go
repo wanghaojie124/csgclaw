@@ -82,8 +82,7 @@ func (a *App) Execute(ctx context.Context, args []string) error {
 		return err
 	}
 	if globals.Version {
-		a.printVersion()
-		return nil
+		return a.printVersion(globals.Output)
 	}
 	if len(rest) == 0 {
 		a.usage()
@@ -119,6 +118,9 @@ func (a *App) parseGlobalOptions(args []string) (GlobalOptions, []string, error)
 	}
 	if opts.Output == "" {
 		opts.Output = "table"
+	}
+	if _, err := command.NormalizeOutput(opts.Output); err != nil {
+		return GlobalOptions{}, nil, err
 	}
 
 	return opts, rest, nil
@@ -174,8 +176,16 @@ func (a *App) usage() {
 	fmt.Fprintln(a.stderr, "  --version, -V       Print version and exit")
 }
 
-func (a *App) printVersion() {
-	fmt.Fprintf(a.stdout, "csgclaw-cli version %s\n", appversion.Current())
+func (a *App) printVersion(output string) error {
+	version := appversion.Current()
+	if output == "json" {
+		return command.WriteJSON(a.stdout, map[string]string{
+			"program": "csgclaw-cli",
+			"version": version,
+		})
+	}
+	fmt.Fprintf(a.stdout, "csgclaw-cli version %s\n", version)
+	return nil
 }
 
 func (a *App) usageCommandGroup(command string, summary string, usageLine string, subcommands []string) {

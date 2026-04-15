@@ -110,5 +110,14 @@ func (c cmd) runDelete(ctx context.Context, run *command.Context, args []string,
 		return fmt.Errorf("room delete requires exactly one id")
 	}
 
-	return run.APIClient(globals).DeleteRoom(ctx, rest[0])
+	if err := run.APIClient(globals).DeleteRoom(ctx, rest[0]); err != nil {
+		return err
+	}
+	return command.RenderAction(globals.Output, run.Stdout, command.ActionResult{
+		Command: "room",
+		Action:  "delete",
+		Status:  "deleted",
+		ID:      rest[0],
+		Message: fmt.Sprintf("deleted room %s", rest[0]),
+	})
 }

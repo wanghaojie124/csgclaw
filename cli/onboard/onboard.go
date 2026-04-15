@@ -118,7 +118,20 @@ func (c cmd) Run(ctx context.Context, run *command.Context, args []string, globa
 		return err
 	}
 
-	fmt.Fprintf(run.Stdout, "initialized config at %s\n", path)
+	result := command.ActionResult{
+		Command:        "onboard",
+		Action:         "initialize",
+		Status:         "initialized",
+		ConfigPath:     path,
+		ManagerImage:   cfg.Bootstrap.ManagerImage,
+		Users:          []string{"admin", "manager"},
+		ForceRecreated: *forceRecreateManager,
+		Message:        fmt.Sprintf("initialized config at %s", path),
+	}
+	if globals.Output == "json" {
+		return command.RenderAction(globals.Output, run.Stdout, result)
+	}
+	fmt.Fprintln(run.Stdout, result.Message)
 	fmt.Fprintf(run.Stdout, "ensured bootstrap agent %q with image %q\n", agent.ManagerName, cfg.Bootstrap.ManagerImage)
 	fmt.Fprintf(run.Stdout, "ensured IM members %q and %q\n", "admin", "manager")
 	fmt.Fprintln(run.Stdout, "cleared IM invite draft data")

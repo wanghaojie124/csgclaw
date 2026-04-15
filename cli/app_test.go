@@ -282,6 +282,29 @@ func TestExecuteBotDeleteFeishuUsesChannelQuery(t *testing.T) {
 	}
 }
 
+func TestExecuteBotDeleteSupportsJSONOutput(t *testing.T) {
+	var stdout bytes.Buffer
+	app := &App{
+		stdout: &stdout,
+		stderr: &bytes.Buffer{},
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodDelete {
+				t.Fatalf("method = %q, want %q", req.Method, http.MethodDelete)
+			}
+			return jsonResponse(http.StatusNoContent, ``), nil
+		}),
+	}
+
+	if err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "--output", "json", "bot", "delete", "--channel", "feishu", "u-alice"}); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	for _, want := range []string{`"command": "bot"`, `"action": "delete"`, `"status": "deleted"`, `"id": "u-alice"`, `"channel": "feishu"`} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("stdout = %q, want %s", stdout.String(), want)
+		}
+	}
+}
+
 func TestExecuteBotCreateRequiresNameAndRole(t *testing.T) {
 	app := &App{
 		stdout:     &bytes.Buffer{},
@@ -595,6 +618,47 @@ func TestExecuteAgentLogsUsesHTTPClient(t *testing.T) {
 	}
 	if stdout.String() != "line-1\nline-2\n" {
 		t.Fatalf("stdout = %q, want streamed logs", stdout.String())
+	}
+}
+
+func TestExecuteAgentLogsSupportsJSONOutputWithoutFollow(t *testing.T) {
+	var stdout bytes.Buffer
+	app := &App{
+		stdout: &stdout,
+		stderr: &bytes.Buffer{},
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.URL.String() != "http://example.test/api/v1/agents/u-alice/logs?lines=2" {
+				t.Fatalf("url = %q, want logs route", req.URL.String())
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     http.StatusText(http.StatusOK),
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader("line-1\nline-2\n")),
+			}, nil
+		}),
+	}
+
+	if err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "--output", "json", "agent", "logs", "u-alice", "-n", "2"}); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	for _, want := range []string{`"command": "agent"`, `"action": "logs"`, `"id": "u-alice"`, `"logs": "line-1\nline-2\n"`} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("stdout = %q, want %s", stdout.String(), want)
+		}
+	}
+}
+
+func TestExecuteAgentLogsRejectsJSONFollow(t *testing.T) {
+	app := &App{
+		stdout:     &bytes.Buffer{},
+		stderr:     &bytes.Buffer{},
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) { return nil, nil }),
+	}
+
+	err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "--output", "json", "agent", "logs", "u-alice", "--follow"})
+	if err == nil || !strings.Contains(err.Error(), "does not support --output json with --follow") {
+		t.Fatalf("Execute() error = %v, want json follow error", err)
 	}
 }
 
@@ -1033,6 +1097,28 @@ func TestExecuteVersionFlagShortFormPrintsVersion(t *testing.T) {
 	}
 	if got, want := strings.TrimSpace(stdout.String()), "csgclaw version 1.2.3-test"; got != want {
 		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+}
+
+func TestExecuteVersionFlagSupportsJSONOutput(t *testing.T) {
+	originalVersion := appversion.Version
+	appversion.Version = "1.2.3-test"
+	t.Cleanup(func() { appversion.Version = originalVersion })
+
+	var stdout bytes.Buffer
+	app := &App{
+		stdout:     &stdout,
+		stderr:     &bytes.Buffer{},
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) { return nil, nil }),
+	}
+
+	if err := app.Execute(context.Background(), []string{"--output", "json", "--version"}); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	for _, want := range []string{`"program": "csgclaw"`, `"version": "1.2.3-test"`} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("stdout = %q, want %s", stdout.String(), want)
+		}
 	}
 }
 

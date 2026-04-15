@@ -186,6 +186,30 @@ func TestExecuteBotDeleteUsesAPIClient(t *testing.T) {
 	}
 }
 
+func TestExecuteBotDeleteSupportsJSONOutput(t *testing.T) {
+	var stdout bytes.Buffer
+	app := &App{
+		stdout: &stdout,
+		stderr: &bytes.Buffer{},
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodDelete {
+				t.Fatalf("method = %q, want %q", req.Method, http.MethodDelete)
+			}
+			return jsonResponse(http.StatusNoContent, ``), nil
+		}),
+	}
+
+	err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "--output", "json", "bot", "delete", "--channel", "feishu", "u-alice"})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	for _, want := range []string{`"command": "bot"`, `"action": "delete"`, `"status": "deleted"`, `"id": "u-alice"`, `"channel": "feishu"`} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("stdout = %q, want %s", stdout.String(), want)
+		}
+	}
+}
+
 func TestExecuteRoomCreateUsesChannelRoute(t *testing.T) {
 	var stdout bytes.Buffer
 	app := &App{

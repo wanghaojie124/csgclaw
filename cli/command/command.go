@@ -26,6 +26,28 @@ type GlobalOptions struct {
 	Config   string
 }
 
+type ActionResult struct {
+	Command         string   `json:"command,omitempty"`
+	Action          string   `json:"action,omitempty"`
+	Status          string   `json:"status"`
+	ID              string   `json:"id,omitempty"`
+	Channel         string   `json:"channel,omitempty"`
+	Message         string   `json:"message,omitempty"`
+	PID             int      `json:"pid,omitempty"`
+	IMURL           string   `json:"im_url,omitempty"`
+	APIURL          string   `json:"api_url,omitempty"`
+	LogPath         string   `json:"log_path,omitempty"`
+	PIDPath         string   `json:"pid_path,omitempty"`
+	ConfigPath      string   `json:"config_path,omitempty"`
+	ManagerImage    string   `json:"manager_image,omitempty"`
+	Users           []string `json:"users,omitempty"`
+	ForceRecreated  bool     `json:"force_recreated,omitempty"`
+	Logs            string   `json:"logs,omitempty"`
+	Lines           int      `json:"lines,omitempty"`
+	Follow          bool     `json:"follow,omitempty"`
+	EffectiveConfig string   `json:"effective_config,omitempty"`
+}
+
 type Context struct {
 	Program    string
 	Stdout     io.Writer
@@ -83,6 +105,36 @@ func WriteJSON(w io.Writer, v any) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
+}
+
+func NormalizeOutput(output string) (string, error) {
+	switch output {
+	case "", "table":
+		return "table", nil
+	case "json":
+		return "json", nil
+	default:
+		return "", fmt.Errorf("unsupported output format %q", output)
+	}
+}
+
+func RenderAction(output string, w io.Writer, result ActionResult) error {
+	output, err := NormalizeOutput(output)
+	if err != nil {
+		return err
+	}
+	if output == "json" {
+		return WriteJSON(w, result)
+	}
+	if result.Message != "" {
+		_, err := fmt.Fprintln(w, result.Message)
+		return err
+	}
+
+	tw := NewTableWriter(w)
+	fmt.Fprintln(tw, "COMMAND\tACTION\tSTATUS\tID")
+	fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", result.Command, result.Action, result.Status, displayBotField(result.ID))
+	return tw.Flush()
 }
 
 func RenderBots(output string, w io.Writer, bots []apitypes.Bot) error {

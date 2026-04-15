@@ -98,7 +98,7 @@ func (c serveCmd) Run(ctx context.Context, run *command.Context, args []string, 
 	if *daemon {
 		return serveBackground(run, cfg, globals, *logPath, *pidPath)
 	}
-	return serveForeground(ctx, run, cfg)
+	return serveForeground(ctx, run, cfg, globals.Output)
 }
 
 func (stopCmd) Name() string {
@@ -109,7 +109,7 @@ func (stopCmd) Summary() string {
 	return "Stop the local HTTP server."
 }
 
-func (c stopCmd) Run(_ context.Context, run *command.Context, args []string, _ command.GlobalOptions) error {
+func (c stopCmd) Run(_ context.Context, run *command.Context, args []string, globals command.GlobalOptions) error {
 	fs := run.NewFlagSet("stop", run.Program+" stop [flags]", c.Summary())
 	defaultPIDPath, err := defaultServerPIDPath()
 	if err != nil {
@@ -131,13 +131,25 @@ func (c stopCmd) Run(_ context.Context, run *command.Context, args []string, _ c
 	if err := proc.Signal(syscall.SIGTERM); err != nil {
 		if errors.Is(err, os.ErrProcessDone) {
 			removePIDFile(*pidPath)
-			fmt.Fprintf(run.Stdout, "removed stale pid file %s\n", *pidPath)
-			return nil
+			return command.RenderAction(globals.Output, run.Stdout, command.ActionResult{
+				Command: "stop",
+				Action:  "stop",
+				Status:  "stale_pid_removed",
+				PID:     pid,
+				PIDPath: *pidPath,
+				Message: fmt.Sprintf("removed stale pid file %s", *pidPath),
+			})
 		}
 		return fmt.Errorf("signal process %d: %w", pid, err)
 	}
-	fmt.Fprintf(run.Stdout, "sent SIGTERM to server process %d\n", pid)
-	return nil
+	return command.RenderAction(globals.Output, run.Stdout, command.ActionResult{
+		Command: "stop",
+		Action:  "stop",
+		Status:  "signaled",
+		PID:     pid,
+		PIDPath: *pidPath,
+		Message: fmt.Sprintf("sent SIGTERM to server process %d", pid),
+	})
 }
 
 func (internalServeCmd) Name() string {
@@ -181,7 +193,7 @@ func (c internalServeCmd) Run(ctx context.Context, run *command.Context, args []
 		cfg.Server.AdvertiseBaseURL = strings.TrimRight(globals.Endpoint, "/")
 	}
 
-	printEffectiveConfig(run, cfg)
+	printEffectiveConfig(run, cfg, globals.Output)
 	svc, err := NewAgentService(cfg)
 	if err != nil {
 		return err
@@ -201,7 +213,7 @@ func (c internalServeCmd) Run(ctx context.Context, run *command.Context, args []
 	return startServer(ctx, cfg, svc, botSvc, imSvc, feishuSvc)
 }
 
-func serveForeground(ctx context.Context, run *command.Context, cfg config.Config) error {
+func serveForeground(ctx context.Context, run *command.Context, cfg config.Config, output string) error {
 	svc, err := NewAgentService(cfg)
 	if err != nil {
 		return err
@@ -221,9 +233,22 @@ func serveForeground(ctx context.Context, run *command.Context, cfg config.Confi
 	apiURL := apiBaseURL(cfg.Server)
 	imURL := imOpenURL(apiURL)
 
-	printEffectiveConfig(run, cfg)
-	fmt.Fprintf(run.Stdout, "CSGClaw IM is available at: %s\n", imURL)
-	fmt.Fprintln(run.Stdout, "Open this URL in your browser after startup.")
+	if output == "json" {
+		if err := command.RenderAction(output, run.Stdout, command.ActionResult{
+			Command:         "serve",
+			Action:          "start",
+			Status:          "starting",
+			IMURL:           imURL,
+			APIURL:          apiURL,
+			EffectiveConfig: formatEffectiveConfig(cfg),
+		}); err != nil {
+			return err
+		}
+	} else {
+		printEffectiveConfig(run, cfg, output)
+		fmt.Fprintf(run.Stdout, "CSGClaw IM is available at: %s\n", imURL)
+		fmt.Fprintln(run.Stdout, "Open this URL in your browser after startup.")
+	}
 
 	return startServer(ctx, cfg, svc, botSvc, imSvc, feishuSvc)
 }
@@ -260,11 +285,26 @@ func serveBackground(run *command.Context, cfg config.Config, globals command.Gl
 		return fmt.Errorf("server process started (pid %d) but health check failed: %w; see %s", cmd.Process.Pid, err, logPath)
 	}
 
-	fmt.Fprintf(run.Stdout, "server started in background (pid %d)\n", cmd.Process.Pid)
-	fmt.Fprintf(run.Stdout, "im: %s\n", imOpenURL(apiURL))
-	fmt.Fprintf(run.Stdout, "api: %s\n", apiURL)
-	fmt.Fprintf(run.Stdout, "log: %s\n", logPath)
-	fmt.Fprintf(run.Stdout, "pid: %s\n", pidPath)
+	result := command.ActionResult{
+		Command: "serve",
+		Action:  "start",
+		Status:  "started",
+		PID:     cmd.Process.Pid,
+		IMURL:   imOpenURL(apiURL),
+		APIURL:  apiURL,
+		LogPath: logPath,
+		PIDPath: pidPath,
+		Message: fmt.Sprintf("server started in background (pid %d)", cmd.Process.Pid),
+	}
+	if globals.Output == "json" {
+		return command.RenderAction(globals.Output, run.Stdout, result)
+	}
+
+	fmt.Fprintln(run.Stdout, result.Message)
+	fmt.Fprintf(run.Stdout, "im: %s\n", result.IMURL)
+	fmt.Fprintf(run.Stdout, "api: %s\n", result.APIURL)
+	fmt.Fprintf(run.Stdout, "log: %s\n", result.LogPath)
+	fmt.Fprintf(run.Stdout, "pid: %s\n", result.PIDPath)
 	return nil
 }
 
@@ -388,7 +428,16 @@ func apiBaseURL(server config.ServerConfig) string {
 	return fmt.Sprintf("http://%s:%s", host, port)
 }
 
-func printEffectiveConfig(run *command.Context, cfg config.Config) {
+func printEffectiveConfig(run *command.Context, cfg config.Config, output string) {
+	if output == "json" {
+		_ = command.RenderAction(output, run.Stdout, command.ActionResult{
+			Command:         "_serve",
+			Action:          "start",
+			Status:          "starting",
+			EffectiveConfig: formatEffectiveConfig(cfg),
+		})
+		return
+	}
 	fmt.Fprintf(run.Stdout, "effective config:\n%s", formatEffectiveConfig(cfg))
 }
 
