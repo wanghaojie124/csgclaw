@@ -330,6 +330,38 @@ func TestExecuteMessageCreateSendsToDefaultChannel(t *testing.T) {
 	assertTableHasRow(t, stdout.String(), "msg-1", "u-admin", "message", "hello")
 }
 
+func TestExecuteMessageCreateSendsMentionIDToDefaultChannel(t *testing.T) {
+	var stdout bytes.Buffer
+	app := &App{
+		stdout: &stdout,
+		stderr: &bytes.Buffer{},
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodPost {
+				t.Fatalf("method = %q, want %q", req.Method, http.MethodPost)
+			}
+			if req.URL.String() != "http://example.test/api/v1/messages" {
+				t.Fatalf("url = %q, want default messages route", req.URL.String())
+			}
+			var payload map[string]any
+			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode request: %v", err)
+			}
+			if payload["room_id"] != "room-1" || payload["sender_id"] != "u-admin" || payload["content"] != "hi" || payload["mention_id"] != "u-dev" {
+				t.Fatalf("payload = %#v, want room/sender/content/mention_id", payload)
+			}
+			return jsonResponse(http.StatusCreated, `{"id":"msg-1","sender_id":"u-admin","kind":"message","content":"@manager hi","created_at":"2026-04-12T09:00:00Z","mentions":["u-manager"]}`), nil
+		}),
+	}
+
+	err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "message", "create", "--channel", "csgclaw", "--room-id", "room-1", "--sender-id", "u-admin", "--content", "hi", "--mention-id", "u-dev"})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(stdout.String(), "msg-1") || !strings.Contains(stdout.String(), "@manager hi") {
+		t.Fatalf("stdout = %q, want message with mention-prefixed content", stdout.String())
+	}
+}
+
 func TestExecuteMessageCreateSendsToFeishuChannel(t *testing.T) {
 	var stdout bytes.Buffer
 	app := &App{

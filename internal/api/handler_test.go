@@ -1388,6 +1388,45 @@ func TestHandleMessagesPostCreatesMessage(t *testing.T) {
 	}
 }
 
+func TestHandleMessagesPostPrefixesMentionID(t *testing.T) {
+	srv := &Handler{
+		im: im.NewServiceFromBootstrap(im.Bootstrap{
+			CurrentUserID: "u-admin",
+			Users: []im.User{
+				{ID: "u-admin", Name: "admin", Handle: "admin"},
+				{ID: "u-dev", Name: "dev", Handle: "dev"},
+				{ID: "u-manager", Name: "manager", Handle: "manager"},
+			},
+			Rooms: []im.Room{
+				{
+					ID:           "room-1",
+					Title:        "Room One",
+					Participants: []string{"u-admin", "u-dev", "u-manager"},
+				},
+			},
+		}),
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/messages", strings.NewReader(`{"room_id":"room-1","sender_id":"u-admin","content":"hi","mention_id":"u-dev"}`))
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	var got im.Message
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.Content != "@manager hi" {
+		t.Fatalf("content = %q, want @manager hi", got.Content)
+	}
+	if len(got.Mentions) != 1 || got.Mentions[0] != "u-manager" {
+		t.Fatalf("mentions = %+v, want u-manager", got.Mentions)
+	}
+}
+
 func TestHandleFeishuMessagesPostSendsMessage(t *testing.T) {
 	feishuSvc := channel.NewFeishuServiceWithSendMessage(
 		map[string]channel.FeishuAppConfig{"u-manager": {AppID: "cli_manager", AppSecret: "manager-secret"}},

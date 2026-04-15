@@ -143,6 +143,57 @@ func TestCreateRoomStoresStructuredEvent(t *testing.T) {
 	}
 }
 
+func TestCreateMessagePrefixesMentionHandle(t *testing.T) {
+	svc := NewServiceFromBootstrap(Bootstrap{
+		CurrentUserID: "u-admin",
+		Users: []User{
+			{ID: "u-admin", Name: "admin", Handle: "admin"},
+			{ID: "u-dev", Name: "dev", Handle: "dev"},
+			{ID: "u-manager", Name: "manager", Handle: "manager"},
+		},
+		Rooms: []Room{
+			{ID: "room-1", Title: "Ops", Participants: []string{"u-admin", "u-dev", "u-manager"}},
+		},
+	})
+
+	message, err := svc.CreateMessage(CreateMessageRequest{
+		RoomID:    "room-1",
+		SenderID:  "u-admin",
+		Content:   "hi",
+		MentionID: "u-dev",
+	})
+	if err != nil {
+		t.Fatalf("CreateMessage() error = %v", err)
+	}
+	if message.Content != "@manager hi" {
+		t.Fatalf("CreateMessage() content = %q, want @manager hi", message.Content)
+	}
+	if len(message.Mentions) != 1 || message.Mentions[0] != "u-manager" {
+		t.Fatalf("CreateMessage() mentions = %+v, want [u-manager]", message.Mentions)
+	}
+}
+
+func TestCreateMessageWithMentionIDUsesManagerHandle(t *testing.T) {
+	svc := NewServiceFromBootstrap(Bootstrap{
+		CurrentUserID: "u-admin",
+		Users:         []User{{ID: "u-admin", Name: "admin", Handle: "admin"}},
+		Rooms:         []Room{{ID: "room-1", Title: "Ops", Participants: []string{"u-admin"}}},
+	})
+
+	message, err := svc.CreateMessage(CreateMessageRequest{
+		RoomID:    "room-1",
+		SenderID:  "u-admin",
+		Content:   "hi",
+		MentionID: "u-missing",
+	})
+	if err != nil {
+		t.Fatalf("CreateMessage() error = %v", err)
+	}
+	if message.Content != "@manager hi" {
+		t.Fatalf("CreateMessage() content = %q, want @manager hi", message.Content)
+	}
+}
+
 func TestListRoomsUsersAndMessages(t *testing.T) {
 	earlier := time.Date(2026, 4, 1, 9, 0, 0, 0, time.UTC)
 	later := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)

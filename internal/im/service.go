@@ -774,6 +774,10 @@ func (s *Service) CreateMessage(req CreateMessageRequest) (Message, error) {
 	if _, ok := s.users[req.SenderID]; !ok {
 		return Message{}, fmt.Errorf("sender not found")
 	}
+	content, err := s.contentWithMentionPrefixLocked(content, req.MentionID)
+	if err != nil {
+		return Message{}, err
+	}
 
 	room, ok := s.rooms[roomID]
 	if !ok {
@@ -1141,6 +1145,32 @@ func (s *Service) newMessage(messageID, senderID, kind, content string) Message 
 		CreatedAt: time.Now().UTC(),
 		Mentions:  s.extractMentions(content),
 	}
+}
+
+func (s *Service) contentWithMentionPrefixLocked(content, mentionID string) (string, error) {
+	mentionID = strings.TrimSpace(mentionID)
+	if mentionID == "" {
+		return content, nil
+	}
+
+	managerID, ok := s.byHandle["manager"]
+	if !ok {
+		managerID = "u-manager"
+	}
+	user, ok := s.users[managerID]
+	if !ok {
+		return "", fmt.Errorf("manager user not found")
+	}
+	handle := strings.TrimSpace(user.Handle)
+	if handle == "" {
+		return "", fmt.Errorf("manager user has no handle")
+	}
+
+	prefix := "@" + handle
+	if content == prefix || strings.HasPrefix(content, prefix+" ") {
+		return content, nil
+	}
+	return prefix + " " + strings.TrimSpace(content), nil
 }
 
 func (s *Service) saveLocked() error {
