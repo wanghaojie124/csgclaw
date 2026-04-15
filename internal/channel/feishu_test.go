@@ -62,6 +62,100 @@ func TestFeishuServiceKeepsNamedAppConfigs(t *testing.T) {
 	}
 }
 
+func TestFeishuListUsersUsesConfiguredAppsAndOpenIDs(t *testing.T) {
+	svc := NewFeishuServiceWithBotOpenIDResolver(
+		map[string]FeishuAppConfig{
+			"u-manager": {AppID: "cli_manager", AppSecret: "manager-secret"},
+			"u-dev":     {AppID: "cli_dev", AppSecret: "dev-secret"},
+		},
+		func(_ context.Context, app FeishuAppConfig) (string, error) {
+			switch app.AppID {
+			case "cli_manager":
+				return "ou_manager", nil
+			case "cli_dev":
+				return "ou_dev", nil
+			default:
+				return "", nil
+			}
+		},
+	)
+
+	users := svc.ListUsers()
+	if len(users) != 2 {
+		t.Fatalf("len(ListUsers()) = %d, want 2", len(users))
+	}
+	if got, want := users[0].ID, "ou_dev"; got != want {
+		t.Fatalf("users[0].ID = %q, want %q", got, want)
+	}
+	if got, want := users[0].Name, "u-dev"; got != want {
+		t.Fatalf("users[0].Name = %q, want %q", got, want)
+	}
+	if got, want := users[1].ID, "ou_manager"; got != want {
+		t.Fatalf("users[1].ID = %q, want %q", got, want)
+	}
+	if got, want := users[1].Name, "u-manager"; got != want {
+		t.Fatalf("users[1].Name = %q, want %q", got, want)
+	}
+}
+
+func TestFeishuResolveBotUserUsesConfiguredOpenID(t *testing.T) {
+	svc := NewFeishuServiceWithBotOpenIDResolver(
+		map[string]FeishuAppConfig{
+			"u-alice": {AppID: "cli_alice", AppSecret: "alice-secret"},
+		},
+		func(_ context.Context, app FeishuAppConfig) (string, error) {
+			if got, want := app.AppID, "cli_alice"; got != want {
+				t.Fatalf("resolve app_id = %q, want %q", got, want)
+			}
+			return "ou_alice", nil
+		},
+	)
+
+	user, ok, err := svc.ResolveBotUser(context.Background(), "u-alice")
+	if err != nil {
+		t.Fatalf("ResolveBotUser() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("ResolveBotUser() ok = false, want true")
+	}
+	if got, want := user.ID, "ou_alice"; got != want {
+		t.Fatalf("user.ID = %q, want %q", got, want)
+	}
+	if got, want := user.Name, "u-alice"; got != want {
+		t.Fatalf("user.Name = %q, want %q", got, want)
+	}
+}
+
+func TestFeishuEnsureUserUsesConfiguredOpenID(t *testing.T) {
+	svc := NewFeishuServiceWithBotOpenIDResolver(
+		map[string]FeishuAppConfig{
+			"u-alice": {AppID: "cli_alice", AppSecret: "alice-secret"},
+		},
+		func(_ context.Context, app FeishuAppConfig) (string, error) {
+			if got, want := app.AppID, "cli_alice"; got != want {
+				t.Fatalf("resolve app_id = %q, want %q", got, want)
+			}
+			return "ou_alice", nil
+		},
+	)
+
+	user, err := svc.EnsureUser(FeishuCreateUserRequest{
+		ID:     "u-alice",
+		Name:   "alice",
+		Handle: "alice",
+		Role:   "worker",
+	})
+	if err != nil {
+		t.Fatalf("EnsureUser() error = %v", err)
+	}
+	if got, want := user.ID, "ou_alice"; got != want {
+		t.Fatalf("user.ID = %q, want %q", got, want)
+	}
+	if got, want := user.Name, "u-alice"; got != want {
+		t.Fatalf("user.Name = %q, want %q", got, want)
+	}
+}
+
 func TestFeishuBotMembersInChatWithResolversIncludesConfiguredBots(t *testing.T) {
 	apps := map[string]FeishuAppConfig{
 		"u-manager": {AppID: "cli_manager", AppSecret: "manager-secret"},

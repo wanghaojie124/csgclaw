@@ -627,6 +627,56 @@ func TestServiceCreateFeishuManagerEnsuresExistingUser(t *testing.T) {
 	}
 }
 
+func TestServiceCreateFeishuManagerUsesConfiguredOpenID(t *testing.T) {
+	agentSvc := mustNewSeededAgentService(t, []agent.Agent{
+		{
+			ID:        agent.ManagerUserID,
+			Name:      agent.ManagerName,
+			Role:      agent.RoleManager,
+			CreatedAt: time.Date(2026, 4, 12, 9, 0, 0, 0, time.UTC),
+		},
+	})
+	feishuSvc := channel.NewFeishuServiceWithBotOpenIDResolver(
+		map[string]channel.FeishuAppConfig{
+			"u-manager": {AppID: "cli_manager", AppSecret: "manager-secret"},
+		},
+		func(_ context.Context, app channel.FeishuAppConfig) (string, error) {
+			if got, want := app.AppID, "cli_manager"; got != want {
+				t.Fatalf("resolve app_id = %q, want %q", got, want)
+			}
+			return "ou_manager", nil
+		},
+	)
+	store, err := NewMemoryStore(nil)
+	if err != nil {
+		t.Fatalf("NewMemoryStore() error = %v", err)
+	}
+	svc, err := NewServiceWithDependencies(store, agentSvc, nil, feishuSvc)
+	if err != nil {
+		t.Fatalf("NewServiceWithDependencies() error = %v", err)
+	}
+
+	got, err := svc.Create(context.Background(), CreateRequest{
+		Name:    "manager",
+		Role:    string(RoleManager),
+		Channel: string(ChannelFeishu),
+	})
+	if err != nil {
+		t.Fatalf("Create(feishu manager) error = %v", err)
+	}
+	if got.ID != agent.ManagerUserID || got.AgentID != agent.ManagerUserID || got.UserID != "ou_manager" || got.Channel != string(ChannelFeishu) {
+		t.Fatalf("Create(feishu manager) = %+v, want u-manager agent with ou_manager user", got)
+	}
+
+	bots, err := svc.List(string(ChannelFeishu), "")
+	if err != nil {
+		t.Fatalf("List(feishu) error = %v", err)
+	}
+	if len(bots) != 1 || bots[0].UserID != "ou_manager" {
+		t.Fatalf("List(feishu) = %+v, want manager user_id ou_manager", bots)
+	}
+}
+
 func TestServiceCreateManagerBootstrapsMissingAgent(t *testing.T) {
 	agent.SetTestHooks(
 		func(_ *agent.Service, _ string) (*boxlite.Runtime, error) { return &boxlite.Runtime{}, nil },

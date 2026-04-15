@@ -295,34 +295,19 @@ func (s *Service) ensureChannelUser(channelName string, created agent.Agent) (st
 		if s.feishu == nil {
 			return "", time.Time{}, fmt.Errorf("feishu service is required")
 		}
-		if user, ok := findFeishuUserByID(s.feishu.ListUsers(), created.ID); ok {
-			return user.ID, user.CreatedAt, nil
-		}
-		// Keep Feishu mock users keyed by the agent ID for now. Future real
-		// open_id/app_id mappings belong in bot/channel state, not agent state.
-		user, err := s.feishu.CreateUser(channel.FeishuCreateUserRequest{
+		user, err := s.feishu.EnsureUser(channel.FeishuCreateUserRequest{
 			ID:     created.ID,
 			Name:   created.Name,
 			Handle: deriveAgentHandle(created),
 			Role:   displayRole(created.Role),
 		})
 		if err != nil {
-			return "", time.Time{}, fmt.Errorf("failed to create feishu user: %w", err)
+			return "", time.Time{}, fmt.Errorf("failed to ensure feishu user: %w", err)
 		}
 		return user.ID, user.CreatedAt, nil
 	default:
 		return "", time.Time{}, fmt.Errorf("channel must be one of %q or %q", ChannelCSGClaw, ChannelFeishu)
 	}
-}
-
-func findFeishuUserByID(users []im.User, id string) (im.User, bool) {
-	id = strings.TrimSpace(id)
-	for _, user := range users {
-		if user.ID == id {
-			return user, true
-		}
-	}
-	return im.User{}, false
 }
 
 func deriveAgentHandle(a agent.Agent) string {

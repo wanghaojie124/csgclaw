@@ -19,7 +19,9 @@ import (
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 )
 
-const feishuManagerAppUserID = "u-manager"
+const (
+	feishuManagerBotID = "u-manager"
+)
 
 type FeishuCreateUserRequest struct {
 	ID     string `json:"id,omitempty"`
@@ -86,6 +88,7 @@ type FeishuService struct {
 	byHandle         map[string]string
 	rooms            map[string]*im.Room
 	apps             map[string]FeishuAppConfig
+	resolveBotOpenID func(context.Context, FeishuAppConfig) (string, error)
 	createChat       FeishuCreateChatFunc
 	addChatMembers   FeishuAddChatMembersFunc
 	listChatMembers  FeishuListChatMembersFunc
@@ -107,6 +110,7 @@ func NewFeishuService(apps ...map[string]FeishuAppConfig) *FeishuService {
 		byHandle:         make(map[string]string),
 		rooms:            make(map[string]*im.Room),
 		apps:             configuredApps,
+		resolveBotOpenID: fetchBotOpenID,
 		createChat:       defaultFeishuCreateChat,
 		addChatMembers:   defaultFeishuAddChatMembers,
 		listChatMembers:  defaultFeishuListChatMembers,
@@ -115,6 +119,14 @@ func NewFeishuService(apps ...map[string]FeishuAppConfig) *FeishuService {
 		sendMessage:      defaultFeishuSendMessage,
 		messageBus:       NewFeishuMessageBus(),
 	}
+}
+
+func NewFeishuServiceWithBotOpenIDResolver(apps map[string]FeishuAppConfig, resolveBotOpenID func(context.Context, FeishuAppConfig) (string, error)) *FeishuService {
+	svc := NewFeishuService(apps)
+	if resolveBotOpenID != nil {
+		svc.resolveBotOpenID = resolveBotOpenID
+	}
+	return svc
 }
 
 func NewFeishuServiceWithCreateChat(apps map[string]FeishuAppConfig, createChat FeishuCreateChatFunc) *FeishuService {
@@ -227,16 +239,114 @@ func (s *FeishuService) CreateUser(req FeishuCreateUserRequest) (im.User, error)
 }
 
 func (s *FeishuService) ListUsers() []im.User {
-	// Mock implementation. Real Feishu support should call the external Feishu API.
 	s.mu.RLock()
-	defer s.mu.RUnlock()
+	apps := make(map[string]FeishuAppConfig, len(s.apps))
+	for botID, app := range s.apps {
+		apps[botID] = app
+	}
+	localUsers := make(map[string]im.User, len(s.users))
+	for id, user := range s.users {
+		localUsers[id] = user
+	}
+	resolveBotOpenID := s.resolveBotOpenID
+	s.mu.RUnlock()
 
-	users := make([]im.User, 0, len(s.users))
-	for _, user := range s.users {
+	users := make([]im.User, 0, len(apps)+len(localUsers))
+	seenIDs := make(map[string]struct{}, len(apps)+len(localUsers))
+	configuredBotIDs := make(map[string]struct{}, len(apps))
+	for botID, rawApp := range apps {
+		configuredBotIDs[botID] = struct{}{}
+
+		app, err := validateFeishuAppConfig(rawApp, botID)
+		if err != nil {
+			continue
+		}
+		openID, err := resolveBotOpenID(context.Background(), app)
+		if err != nil {
+			continue
+		}
+		openID = strings.TrimSpace(openID)
+		if openID == "" {
+			continue
+		}
+		if _, ok := seenIDs[openID]; ok {
+			continue
+		}
+
+		user, ok := localUsers[botID]
+		if !ok {
+			user = im.User{
+				Name:      botID,
+				Handle:    deriveHandle(botID, openID),
+				Role:      "member",
+				Avatar:    initials(botID),
+				IsOnline:  true,
+				CreatedAt: time.Now().UTC(),
+			}
+		}
+		user.ID = openID
+		user.AccentHex = accentHexForID(openID)
+		users = append(users, user)
+		seenIDs[openID] = struct{}{}
+	}
+	for id, user := range localUsers {
+		if _, ok := configuredBotIDs[id]; ok {
+			continue
+		}
+		if _, ok := seenIDs[user.ID]; ok {
+			continue
+		}
 		users = append(users, user)
 	}
 	slices.SortFunc(users, func(a, b im.User) int { return strings.Compare(a.Name, b.Name) })
 	return users
+}
+
+func (s *FeishuService) ResolveBotUser(ctx context.Context, botID string) (im.User, bool, error) {
+	if s == nil {
+		return im.User{}, false, nil
+	}
+	openID, err := s.ResolveBotOpenID(ctx, botID)
+	if err != nil {
+		return im.User{}, false, err
+	}
+	openID = strings.TrimSpace(openID)
+	if openID == "" || openID == strings.TrimSpace(botID) {
+		return im.User{}, false, nil
+	}
+	if user, ok := findFeishuUserByID(s.ListUsers(), openID); ok {
+		return user, true, nil
+	}
+	return im.User{
+		ID:        openID,
+		Name:      strings.TrimSpace(botID),
+		Handle:    deriveHandle(botID, openID),
+		Role:      "member",
+		Avatar:    initials(botID),
+		IsOnline:  true,
+		AccentHex: accentHexForID(openID),
+		CreatedAt: time.Now().UTC(),
+	}, true, nil
+}
+
+func (s *FeishuService) EnsureUser(req FeishuCreateUserRequest) (im.User, error) {
+	if user, ok, err := s.ResolveBotUser(context.Background(), req.ID); err == nil && ok {
+		return user, nil
+	}
+	if user, ok := findFeishuUserByID(s.ListUsers(), req.ID); ok {
+		return user, nil
+	}
+	return s.CreateUser(req)
+}
+
+func findFeishuUserByID(users []im.User, id string) (im.User, bool) {
+	id = strings.TrimSpace(id)
+	for _, user := range users {
+		if user.ID == id {
+			return user, true
+		}
+	}
+	return im.User{}, false
 }
 
 func (s *FeishuService) CreateRoom(req im.CreateRoomRequest) (im.Room, error) {
@@ -872,7 +982,7 @@ func (s *FeishuService) ResolveBotOpenID(ctx context.Context, botID string) (str
 	if err != nil {
 		return "", err
 	}
-	return fetchBotOpenID(ctx, app)
+	return s.resolveBotOpenID(ctx, app)
 }
 
 func (s *FeishuService) ListRooms() ([]im.Room, error) {
@@ -1090,11 +1200,11 @@ func (s *FeishuService) appConfigForMentionLocked(mention string) (FeishuAppConf
 }
 
 func (s *FeishuService) managerAppConfigLocked() (FeishuAppConfig, error) {
-	app, ok := s.apps[feishuManagerAppUserID]
+	app, ok := s.apps[feishuManagerBotID]
 	if !ok {
-		return FeishuAppConfig{}, fmt.Errorf("feishu app is not configured for %q", feishuManagerAppUserID)
+		return FeishuAppConfig{}, fmt.Errorf("feishu app is not configured for %q", feishuManagerBotID)
 	}
-	return validateFeishuAppConfig(app, feishuManagerAppUserID)
+	return validateFeishuAppConfig(app, feishuManagerBotID)
 }
 
 func validateFeishuAppConfig(app FeishuAppConfig, ownerID string) (FeishuAppConfig, error) {
