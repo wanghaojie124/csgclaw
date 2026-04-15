@@ -754,23 +754,77 @@ func TestExecuteMemberListCsgclawUsesRoomMembersRoute(t *testing.T) {
 	assertTableHasRow(t, stdout.String(), "u-alice", "Alice", "alice", "worker", "true")
 }
 
-func TestExecuteMemberCreateCsgclawUnsupported(t *testing.T) {
+func TestExecuteMemberCreateCsgclawUsesRoomMembersRoute(t *testing.T) {
+	var stdout bytes.Buffer
 	app := &App{
-		stdout: &bytes.Buffer{},
+		stdout: &stdout,
 		stderr: &bytes.Buffer{},
 		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-			t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
-			return nil, nil
+			if req.Method != http.MethodPost {
+				t.Fatalf("method = %q, want %q", req.Method, http.MethodPost)
+			}
+			if req.URL.String() != "http://example.test/api/v1/rooms/room-1/members" {
+				t.Fatalf("url = %q, want csgclaw room members route", req.URL.String())
+			}
+
+			var payload map[string]any
+			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode request: %v", err)
+			}
+			if payload["room_id"] != "room-1" {
+				t.Fatalf("payload[room_id] = %#v, want room-1", payload["room_id"])
+			}
+			userIDs, ok := payload["user_ids"].([]any)
+			if !ok || len(userIDs) != 1 || userIDs[0] != "u-alice" {
+				t.Fatalf("payload[user_ids] = %#v, want [u-alice]", payload["user_ids"])
+			}
+			if payload["inviter_id"] != "u-admin" {
+				t.Fatalf("payload[inviter_id] = %#v, want u-admin", payload["inviter_id"])
+			}
+			return jsonResponse(http.StatusOK, `{"id":"room-1","title":"Ops","participants":["u-admin","u-alice"],"messages":[]}`), nil
 		}),
 	}
 
-	err := app.Execute(context.Background(), []string{"member", "create", "--channel", "csgclaw", "--room-id", "room-1", "--user-id", "u-alice"})
-	if err == nil {
-		t.Fatal("Execute() error = nil, want unsupported channel")
+	err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "member", "create", "--channel", "csgclaw", "--room-id", "room-1", "--user-id", "u-alice", "--inviter-id", "u-admin"})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
 	}
-	if !strings.Contains(err.Error(), "currently supports --channel feishu") {
-		t.Fatalf("Execute() error = %v, want feishu-only error", err)
+	assertTableHasRow(t, stdout.String(), "room-1", "Ops", "2", "0")
+}
+
+func TestExecuteMemberCreateUsesCsgclawDefault(t *testing.T) {
+	var stdout bytes.Buffer
+	app := &App{
+		stdout: &stdout,
+		stderr: &bytes.Buffer{},
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodPost {
+				t.Fatalf("method = %q, want %q", req.Method, http.MethodPost)
+			}
+			if req.URL.String() != "http://example.test/api/v1/rooms/room-1/members" {
+				t.Fatalf("url = %q, want csgclaw room members route", req.URL.String())
+			}
+
+			var payload map[string]any
+			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode request: %v", err)
+			}
+			if payload["room_id"] != "room-1" {
+				t.Fatalf("payload[room_id] = %#v, want room-1", payload["room_id"])
+			}
+			userIDs, ok := payload["user_ids"].([]any)
+			if !ok || len(userIDs) != 1 || userIDs[0] != "u-alice" {
+				t.Fatalf("payload[user_ids] = %#v, want [u-alice]", payload["user_ids"])
+			}
+			return jsonResponse(http.StatusOK, `{"id":"room-1","title":"Ops","participants":["u-admin","u-alice"],"messages":[]}`), nil
+		}),
 	}
+
+	err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "member", "create", "--room-id", "room-1", "--user-id", "u-alice", "--inviter-id", "u-admin"})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	assertTableHasRow(t, stdout.String(), "room-1", "Ops", "2", "0")
 }
 
 func TestExecuteRoomCreateUsesHTTPClient(t *testing.T) {

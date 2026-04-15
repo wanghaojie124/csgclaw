@@ -318,10 +318,7 @@ func roomMembersPath(channelName, roomID, operation string) (string, error) {
 	case "feishu":
 		return "/api/v1/channels/feishu/rooms/" + url.PathEscape(roomID) + "/members", nil
 	case "", "csgclaw":
-		if operation == "list" {
-			return "/api/v1/rooms/" + url.PathEscape(roomID) + "/members", nil
-		}
-		return "", fmt.Errorf("member %s currently supports --channel feishu", operation)
+		return "/api/v1/rooms/" + url.PathEscape(roomID) + "/members", nil
 	default:
 		return "", fmt.Errorf("unsupported channel %q", channelName)
 	}

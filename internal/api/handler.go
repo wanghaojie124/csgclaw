@@ -528,7 +528,12 @@ func (h *Handler) handleRoomByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleRoomMembersByID(w http.ResponseWriter, r *http.Request, roomID string) {
-	if r.Method != http.MethodGet {
+	switch r.Method {
+	case http.MethodGet:
+	case http.MethodPost:
+		h.handleAddRoomMembers(w, r, roomID)
+		return
+	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -636,11 +641,23 @@ func (h *Handler) handleIMRoomMembers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	h.handleAddRoomMembers(w, r, "")
+}
 
+func (h *Handler) handleAddRoomMembers(w http.ResponseWriter, r *http.Request, pathRoomID string) {
 	var req addRoomMembersRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, fmt.Sprintf("decode request: %v", err), http.StatusBadRequest)
 		return
+	}
+	pathRoomID = strings.TrimSpace(pathRoomID)
+	if pathRoomID != "" {
+		bodyRoomID := strings.TrimSpace(req.RoomID)
+		if bodyRoomID != "" && bodyRoomID != pathRoomID {
+			http.Error(w, "room_id does not match path room id", http.StatusBadRequest)
+			return
+		}
+		req.RoomID = pathRoomID
 	}
 
 	serviceReq, err := req.toServiceRequest()
