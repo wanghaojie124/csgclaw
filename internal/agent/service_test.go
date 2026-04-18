@@ -1503,9 +1503,12 @@ func TestAddFeishuBoxEnvVarsRequiresExactBotIDMatch(t *testing.T) {
 	}
 }
 
-func TestResolveManagerBaseURLPrefersLocalIP(t *testing.T) {
+func TestResolveManagerBaseURLPrefersAdvertiseBaseURL(t *testing.T) {
 	orig := localIPv4Resolver
-	localIPv4Resolver = func() string { return "10.0.0.8" }
+	localIPv4Resolver = func() string {
+		t.Fatal("local IPv4 resolver should not be called when advertise_base_url is set")
+		return "10.0.0.8"
+	}
 	t.Cleanup(func() {
 		localIPv4Resolver = orig
 	})
@@ -1515,7 +1518,7 @@ func TestResolveManagerBaseURLPrefersLocalIP(t *testing.T) {
 		AdvertiseBaseURL: "http://127.0.0.1:18080",
 	})
 
-	want := "http://10.0.0.8:19090"
+	want := "http://127.0.0.1:18080"
 	if got != want {
 		t.Fatalf("resolveManagerBaseURL() = %q, want %q", got, want)
 	}

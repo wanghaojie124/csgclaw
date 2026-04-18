@@ -4,6 +4,14 @@
 
 `csgclaw onboard` 会写入 `csgclaw serve` 使用的本地配置文件。配置内容包括 server 访问方式、模型 provider、bootstrap 镜像、sandbox 隔离方式和可选通信通道。
 
+## Server 地址
+
+`listen_addr` 是本地 HTTP server 监听的地址。
+
+`advertise_base_url` 是 CSGClaw 传给 manager 和 worker box 的回连地址，box 会用它访问本地 HTTP server。设置后，CSGClaw 会直接使用该值，只去掉末尾的 `/`，不会再自动推断本机 IP。为空时，CSGClaw 才会回退到自动推断出的本机 IPv4 地址，并拼上监听端口。
+
+当自动推断出的地址无法从 BoxLite box 内访问时，可以设置 `advertise_base_url`，例如使用局域网地址、隧道地址或 host alias。
+
 ## Model Provider 配置示例
 
 ### 本地 CSGHub-lite

@@ -153,12 +153,12 @@ func updateCSGClawChannel(cfg map[string]any, botID string, server config.Server
 }
 
 func resolveManagerBaseURL(server config.ServerConfig) string {
+	if server.AdvertiseBaseURL != "" {
+		return strings.TrimRight(server.AdvertiseBaseURL, "/")
+	}
 	port := config.ListenPort(server.ListenAddr)
 	if ip := localIPv4Resolver(); ip != "" {
 		return fmt.Sprintf("http://%s:%s", ip, port)
-	}
-	if server.AdvertiseBaseURL != "" {
-		return strings.TrimRight(server.AdvertiseBaseURL, "/")
 	}
 	return ""
 }
