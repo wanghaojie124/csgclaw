@@ -84,7 +84,7 @@ boxlite_cli_registry = []
 
 字段说明：
 
-- `provider`: 支持现有 `boxlite` 和新增 `boxlite-cli`。
+- `provider`: 支持现有 `boxlite-sdk` 和新增 `boxlite-cli`。
 - `home_dir_name`: 继续控制 per-agent BoxLite home 目录名，保持路径兼容。
 - `boxlite_cli_path`: `boxlite` 可执行文件路径，默认从 `PATH` 查找。
 - `boxlite_cli_config`: 可选 `--config` 路径。
@@ -261,7 +261,7 @@ go test ./internal/sandbox/boxlitecli
 - `internal/config` 增加 CLI provider 配置字段。
 - `cli/serve` 的 `sandboxServiceOptions` 支持 `boxlite-cli`。
 - `cli/onboard` 支持生成或保留 `[sandbox] provider = "boxlite-cli"`。
-- 保持 `boxlite` Go SDK provider 可用，避免一次性切换默认行为。
+- 保持 `boxlite-sdk` Go SDK provider 可用，避免一次性切换默认行为。
 
 测试重点：
 

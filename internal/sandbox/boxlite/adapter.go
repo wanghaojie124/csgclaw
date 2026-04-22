@@ -10,7 +10,7 @@ import (
 	"csgclaw/internal/sandbox"
 )
 
-const providerName = "boxlite"
+const providerName = "boxlite-sdk"
 
 // Provider opens BoxLite-backed sandbox runtimes.
 type Provider struct{}

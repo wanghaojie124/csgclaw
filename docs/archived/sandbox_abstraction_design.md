@@ -174,7 +174,7 @@ BoxLite adapter 将 `boxlite.IsNotFound(err)` 包装为 `sandbox.ErrNotFound`。
 
 | 新抽象 | 语义 | 当前 `internal/agent` 入口 | 当前 BoxLite SDK 对应 |
 |---|---|---|---|
-| `Provider.Name()` | 返回 sandbox 后端名称，例如 `boxlite` | 新增，无现有对应 | adapter 固定返回 `"boxlite"` |
+| `Provider.Name()` | 返回 sandbox 后端名称，例如 `boxlite-sdk` | 新增，无现有对应 | adapter 固定返回 `"boxlite-sdk"` |
 | `Provider.Open(ctx, homeDir)` | 打开或初始化 runtime 管理上下文，不创建 box | `ensureRuntimeAtHome(homeDir)` | `boxlite.NewRuntime(boxlite.WithHomeDir(homeDir))` |
 | `Runtime.Create(ctx, spec)` | 创建实例，但是否启动由 adapter/spec 语义决定；建议业务层仍显式调用 `Start` | `createBox(ctx, rt, image, opts...)`、`createGatewayBox` 内的 `rt.Create` | `rt.Create(ctx, image, opts...)` |
 | `Runtime.Get(ctx, idOrName)` | 按 ID 或名称获取已有实例 handle | `getBox(ctx, rt, idOrName)`、`resolveAgentBox` | `rt.Get(ctx, idOrName)` |
@@ -323,7 +323,7 @@ type SandboxConfig struct {
 
 ```toml
 [sandbox]
-provider = "boxlite"
+provider = "boxlite-sdk"
 home_dir_name = "boxlite"
 ```
 
@@ -331,7 +331,7 @@ home_dir_name = "boxlite"
 
 注意：现有 `config.RuntimeHomeDirName = "boxlite"` 已经把 runtime home 命名绑定到 BoxLite。引入抽象后应迁移为：
 
-- `config.DefaultSandboxProvider = "boxlite"`
+- `config.DefaultSandboxProvider = "boxlite-sdk"`
 - `config.DefaultSandboxHomeDirName = "boxlite"`
 - `boxRuntimeHome` 改名为 `sandboxRuntimeHome`。
 
@@ -438,7 +438,7 @@ go test ./internal/agent ./internal/bot ./internal/api
 
 - 在 `internal/config.Config` 增加 `Sandbox SandboxConfig`。
 - loader/saver 支持 `[sandbox]`。
-- 默认 provider 为 `boxlite`。
+- 默认 provider 为 `boxlite-sdk`。
 - onboard 和 serve 创建 agent service 时传入 provider。
 - 文档更新 `README.md`、`docs/architecture.md`、`docs/README.go.md`。
 

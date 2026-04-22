@@ -9,13 +9,13 @@ This repository includes the Go implementation for:
 Runtime notes:
 
 - Agent execution uses the `internal/sandbox` abstraction.
-- The default sandbox provider is `boxlite`, backed by the vendored BoxLite Go SDK.
+- The default sandbox provider is `boxlite-sdk`, backed by the vendored BoxLite Go SDK.
 - `boxlite-cli` is also available for environments that provide a preinstalled `boxlite` binary.
 - The generated config includes:
 
 ```toml
 [sandbox]
-provider = "boxlite"
+provider = "boxlite-sdk"
 home_dir_name = "boxlite"
 boxlite_cli_path = "boxlite"
 ```
@@ -35,6 +35,6 @@ boxlite_cli_path = "boxlite"
 - The `boxlite-cli` provider does not require the vendored Go SDK at runtime.
 - The BoxLite Go SDK requires Go 1.24+ with CGO enabled.
 - The vendored SDK tracks `github.com/RussellLuo/boxlite/sdks/go v0.7.6`.
-- Source builds and the current default `boxlite` provider fetch `libboxlite.a` on demand via `make boxlite-setup` and the standard `make build` / `make test` targets.
+- Source builds and the current default `boxlite-sdk` provider fetch `libboxlite.a` on demand via `make boxlite-setup` and the standard `make build` / `make test` targets.
 - If you prefer to run the setup manually, use `(cd third_party/boxlite-go && BOXLITE_SDK_VERSION=v0.7.6 go run ./cmd/setup)`.
 - The prebuilt BoxLite native library currently supports macOS arm64 and Linux amd64.

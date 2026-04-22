@@ -15,6 +15,7 @@ COMMIT="${COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo unknown)}"
 BUILD_TIME="${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 DIST_DIR="${DIST_DIR:-dist}"
 GOCACHE="${GOCACHE:-$(pwd)/.gocache}"
+GO_BUILD_TAGS="${GO_BUILD_TAGS:-}"
 VERSION_PKG="${VERSION_PKG:-csgclaw/internal/version}"
 LDFLAGS="-X ${VERSION_PKG}.Version=${VERSION} -X ${VERSION_PKG}.Commit=${COMMIT} -X ${VERSION_PKG}.BuildTime=${BUILD_TIME}"
 if [ "$APP" = "csgclaw-cli" ]; then
@@ -27,6 +28,11 @@ mkdir -p "$DIST_DIR"
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 
+build_args=()
+if [ -n "$GO_BUILD_TAGS" ]; then
+  build_args+=(-tags "$GO_BUILD_TAGS")
+fi
+
 binary_name="$APP"
 archive_ext="tar.gz"
 if [ "$GOOS_TARGET" = "windows" ]; then
@@ -35,7 +41,7 @@ if [ "$GOOS_TARGET" = "windows" ]; then
 fi
 
 env GOOS="$GOOS_TARGET" GOARCH="$GOARCH_TARGET" GOCACHE="$GOCACHE" \
-  go build -ldflags "${LDFLAGS}" -o "${tmpdir}/${binary_name}" "${CMD_PATH}"
+  go build "${build_args[@]}" -ldflags "${LDFLAGS}" -o "${tmpdir}/${binary_name}" "${CMD_PATH}"
 
 archive_base="${APP}_${VERSION}_${GOOS_TARGET}_${GOARCH_TARGET}"
 

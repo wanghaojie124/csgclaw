@@ -3,6 +3,7 @@ package onboard
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -87,9 +88,9 @@ func TestRunInteractiveDefaultUsesCSGHubLiteModels(t *testing.T) {
 		`api_key = "local"`,
 		`models = ["Qwen/Qwen3-0.6B-GGUF", "Qwen/Qwen3-1.7B-GGUF"]`,
 		`[sandbox]`,
-		`provider = "boxlite"`,
-		`home_dir_name = "boxlite"`,
-		`boxlite_cli_path = "boxlite"`,
+		fmt.Sprintf(`provider = %q`, config.DefaultSandboxProvider),
+		fmt.Sprintf(`home_dir_name = %q`, config.DefaultSandboxHomeDirName),
+		fmt.Sprintf(`boxlite_cli_path = %q`, config.DefaultBoxLiteCLIPath),
 	} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("saved config missing %q:\n%s", want, content)

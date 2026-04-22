@@ -34,7 +34,7 @@ models = ["Qwen/Qwen3-0.6B-GGUF"]
 manager_image = "ghcr.io/russellluo/picoclaw:2026.4.18"
 
 [sandbox]
-provider = "boxlite"
+provider = "boxlite-sdk"
 home_dir_name = "boxlite"
 boxlite_cli_path = "boxlite"
 ```
@@ -59,7 +59,7 @@ models = ["gpt-5.4"]
 manager_image = "ghcr.io/russellluo/picoclaw:2026.4.18"
 
 [sandbox]
-provider = "boxlite"
+provider = "boxlite-sdk"
 home_dir_name = "boxlite"
 boxlite_cli_path = "boxlite"
 ```
@@ -84,14 +84,14 @@ models = ["gpt-5.4"]
 manager_image = "ghcr.io/russellluo/picoclaw:2026.4.18"
 
 [sandbox]
-provider = "boxlite"
+provider = "boxlite-sdk"
 home_dir_name = "boxlite"
 boxlite_cli_path = "boxlite"
 ```
 
 ## Sandbox Providers
 
-CSGClaw runs Workers through the configured sandbox provider. The default is `boxlite`, which uses the vendored BoxLite Go SDK.
+CSGClaw runs Workers through the configured sandbox provider. The default is `boxlite-sdk`, which uses the vendored BoxLite Go SDK.
 
 You can opt in to the CLI-backed provider when you already have the `boxlite` binary installed:
 
@@ -106,7 +106,10 @@ boxlite_cli_path = "boxlite"
 
 CSGClaw passes an explicit `--home` to the BoxLite CLI for each agent, using the agent directory plus `home_dir_name` such as `~/.csgclaw/agents/<agent-id>/boxlite`. That explicit home takes precedence over `BOXLITE_HOME` for CSGClaw-managed sandboxes, while `BOXLITE_HOME` still applies when you run `boxlite` manually without `--home`.
 
-The `boxlite-cli` provider does not need the vendored Go SDK at runtime. Source builds and the current default `boxlite` provider still use the SDK path, so commands such as `make test` may fetch or link the vendored BoxLite native library.
+The `boxlite-cli` provider does not need the vendored Go SDK at runtime. `boxlite-sdk` is the only sandbox provider that gets special build-time treatment because it pulls in CGO, the native SDK archive, and the larger embedded runtime payload. The repository now supports two build shapes:
+
+- `make build`, `make test`, and `make package` include the `boxlite_sdk` build tag, keeping the SDK-backed `boxlite-sdk` provider compiled in.
+- `make build-without-boxlite-sdk` and `make test-without-boxlite-sdk` skip that build tag, so the resulting binary excludes only the SDK-backed `boxlite-sdk` provider. `boxlite-cli` and other non-SDK providers remain compiled in.
 
 ## Worker Override Example
 

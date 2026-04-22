@@ -34,7 +34,7 @@ models = ["Qwen/Qwen3-0.6B-GGUF"]
 manager_image = "ghcr.io/russellluo/picoclaw:2026.4.18"
 
 [sandbox]
-provider = "boxlite"
+provider = "boxlite-sdk"
 home_dir_name = "boxlite"
 boxlite_cli_path = "boxlite"
 ```
@@ -59,7 +59,7 @@ models = ["gpt-5.4"]
 manager_image = "ghcr.io/russellluo/picoclaw:2026.4.18"
 
 [sandbox]
-provider = "boxlite"
+provider = "boxlite-sdk"
 home_dir_name = "boxlite"
 boxlite_cli_path = "boxlite"
 ```
@@ -84,14 +84,14 @@ models = ["gpt-5.4"]
 manager_image = "ghcr.io/russellluo/picoclaw:2026.4.18"
 
 [sandbox]
-provider = "boxlite"
+provider = "boxlite-sdk"
 home_dir_name = "boxlite"
 boxlite_cli_path = "boxlite"
 ```
 
 ## Sandbox Provider
 
-CSGClaw 通过配置的 sandbox provider 隔离 Worker 执行环境。默认 provider 是 `boxlite`，使用仓库内 vendored BoxLite Go SDK。
+CSGClaw 通过配置的 sandbox provider 隔离 Worker 执行环境。默认 provider 是 `boxlite-sdk`，使用仓库内 vendored BoxLite Go SDK。
 
 如果你已经预先安装了 `boxlite` 命令行程序，可以显式切换到基于 CLI 的 provider：
 
@@ -106,7 +106,10 @@ boxlite_cli_path = "boxlite"
 
 CSGClaw 会为每个 agent 调用 BoxLite CLI 时显式传入 `--home`，目录由 agent 目录和 `home_dir_name` 组成，例如 `~/.csgclaw/agents/<agent-id>/boxlite`。这个显式 home 对 CSGClaw 管理的 sandbox 生效，优先于 `BOXLITE_HOME`；你手动运行 `boxlite` 且不传 `--home` 时，`BOXLITE_HOME` 仍按 BoxLite 自身规则生效。
 
-`boxlite-cli` provider 运行时不需要 vendored Go SDK。不过源码编译和当前默认的 `boxlite` provider 仍会走 SDK 路径，所以 `make test` 等命令仍可能触发 BoxLite native library 的下载或链接。
+`boxlite-cli` provider 运行时不需要 vendored Go SDK。`boxlite-sdk` 是唯一需要特殊编译处理的 sandbox provider，因为它会带入 CGO、native SDK archive，以及更大的 embed runtime。仓库现在支持两种构建形态：
+
+- `make build`、`make test`、`make package` 会带上 `boxlite_sdk` build tag，继续编译 SDK 版 `boxlite-sdk` provider。
+- `make build-without-boxlite-sdk`、`make test-without-boxlite-sdk` 不带这个 build tag，产出的二进制只排除 SDK 版 `boxlite-sdk` provider；`boxlite-cli` 和其他非 SDK provider 仍然会被编译进去。
 
 ## Worker 覆盖示例
 

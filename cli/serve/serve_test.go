@@ -3,6 +3,7 @@ package serve
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -181,9 +182,9 @@ func TestServeForegroundPassesContextToServer(t *testing.T) {
 		`api_key = "sk*****et"`,
 		`access_token = "pc*****et"`,
 		`[sandbox]`,
-		`provider = "boxlite"`,
-		`home_dir_name = "boxlite"`,
-		`boxlite_cli_path = "boxlite"`,
+		fmt.Sprintf(`provider = %q`, config.DefaultSandboxProvider),
+		fmt.Sprintf(`home_dir_name = %q`, config.DefaultSandboxHomeDirName),
+		fmt.Sprintf(`boxlite_cli_path = %q`, config.DefaultBoxLiteCLIPath),
 		`[models]`,
 		`default = "default.model-test"`,
 		`[models.providers.default]`,

@@ -25,8 +25,7 @@ import (
 	"csgclaw/internal/im"
 	"csgclaw/internal/llm"
 	"csgclaw/internal/modelprovider"
-	boxliteadapter "csgclaw/internal/sandbox/boxlite"
-	"csgclaw/internal/sandbox/boxlitecli"
+	"csgclaw/internal/sandboxproviders"
 	"csgclaw/internal/server"
 )
 
@@ -594,20 +593,7 @@ func newAgentService(cfg config.Config) (*agent.Service, error) {
 }
 
 func sandboxServiceOptions(cfg config.SandboxConfig) ([]agent.ServiceOption, error) {
-	cfg = cfg.Resolved()
-	var provider agent.ServiceOption
-	switch cfg.Provider {
-	case config.DefaultSandboxProvider:
-		provider = agent.WithSandboxProvider(boxliteadapter.NewProvider())
-	case config.BoxLiteCLIProvider:
-		provider = agent.WithSandboxProvider(boxlitecli.NewProvider(boxlitecli.WithPath(cfg.BoxLiteCLIPath)))
-	default:
-		return nil, fmt.Errorf("unsupported sandbox provider %q; supported values are %q or %q", cfg.Provider, config.DefaultSandboxProvider, config.BoxLiteCLIProvider)
-	}
-	return []agent.ServiceOption{
-		provider,
-		agent.WithSandboxHomeDirName(cfg.HomeDirName),
-	}, nil
+	return sandboxproviders.ServiceOptions(cfg)
 }
 
 func newIMService() (*im.Service, error) {

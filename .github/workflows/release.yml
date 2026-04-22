@@ -74,6 +74,7 @@ jobs:
           DIST_DIR=dist \
           APP=csgclaw \
           GOCACHE="${{ github.workspace }}/.gocache" \
+          GO_BUILD_TAGS=boxlite_sdk \
           CGO_ENABLED=1 \
           ./scripts/package-release.sh "${{ matrix.goos }}" "${{ matrix.goarch }}"
           VERSION="${{ steps.version.outputs.value }}" \

@@ -17,8 +17,7 @@ import (
 	"csgclaw/internal/config"
 	"csgclaw/internal/im"
 	"csgclaw/internal/modelprovider"
-	boxliteadapter "csgclaw/internal/sandbox/boxlite"
-	"csgclaw/internal/sandbox/boxlitecli"
+	"csgclaw/internal/sandboxproviders"
 
 	"golang.org/x/term"
 )
@@ -574,20 +573,7 @@ func createManagerBot(ctx context.Context, agentsPath, imStatePath string, cfg c
 }
 
 func sandboxServiceOptions(cfg config.SandboxConfig) ([]agent.ServiceOption, error) {
-	cfg = cfg.Resolved()
-	var provider agent.ServiceOption
-	switch cfg.Provider {
-	case config.DefaultSandboxProvider:
-		provider = agent.WithSandboxProvider(boxliteadapter.NewProvider())
-	case config.BoxLiteCLIProvider:
-		provider = agent.WithSandboxProvider(boxlitecli.NewProvider(boxlitecli.WithPath(cfg.BoxLiteCLIPath)))
-	default:
-		return nil, fmt.Errorf("unsupported sandbox provider %q; supported values are %q or %q", cfg.Provider, config.DefaultSandboxProvider, config.BoxLiteCLIProvider)
-	}
-	return []agent.ServiceOption{
-		provider,
-		agent.WithSandboxHomeDirName(cfg.HomeDirName),
-	}, nil
+	return sandboxproviders.ServiceOptions(cfg)
 }
 
 func loadOnboardConfig(path string) (config.Config, bool, error) {
