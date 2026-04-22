@@ -5,7 +5,7 @@ package sandboxproviders
 import (
 	"csgclaw/internal/agent"
 	"csgclaw/internal/config"
-	boxliteadapter "csgclaw/internal/sandbox/boxlite"
+	"csgclaw/internal/sandbox/boxlitesdk"
 )
 
 // The SDK-backed BoxLite provider is the only sandbox implementation behind a
@@ -13,6 +13,6 @@ import (
 // embedded runtime payload. Other sandbox providers should remain always-on.
 func init() {
 	Register(config.BoxLiteSDKProvider, func(config.SandboxConfig) (agent.ServiceOption, error) {
-		return agent.WithSandboxProvider(boxliteadapter.NewProvider()), nil
+		return agent.WithSandboxProvider(boxlitesdk.NewProvider()), nil
 	})
 }

@@ -62,7 +62,7 @@ graph TD
     %% External Dependencies / Runtime
     subgraph RuntimeEnv ["Execution Environment"]
         subgraph SandboxProvider ["Sandbox Provider"]
-            BoxLiteAdapter["BoxLite Adapter<br/>(internal/sandbox/boxlite)"]
+            BoxLiteAdapter["BoxLite Adapter<br/>(internal/sandbox/boxlitesdk)"]
             BoxLiteSDK["BoxLite SDK<br/>(third_party/boxlite-go)"]
         end
     end
@@ -127,7 +127,7 @@ internal/api/           HTTP handlers and route registration
 internal/bot/           bot lifecycle and agent/user binding
 internal/agent/         agent runtime and storage
 internal/sandbox/       runtime-neutral sandbox interfaces
-internal/sandbox/boxlite/ BoxLite sandbox adapter
+internal/sandbox/boxlitesdk/ BoxLite sandbox adapter
 internal/im/            built-in csgclaw IM and PicoClaw bridge
 internal/channel/       external channel integrations, including Feishu
 internal/config/        config defaults, load/save

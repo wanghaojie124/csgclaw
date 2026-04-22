@@ -1,5 +1,5 @@
-// Package boxlite adapts the BoxLite SDK to the generic sandbox interfaces.
-package boxlite
+// Package boxlitesdk adapts the BoxLite SDK to the generic sandbox interfaces.
+package boxlitesdk
 
 import (
 	"context"

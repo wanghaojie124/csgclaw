@@ -1,4 +1,4 @@
-package boxlite
+package boxlitesdk
 
 import (
 	"context"

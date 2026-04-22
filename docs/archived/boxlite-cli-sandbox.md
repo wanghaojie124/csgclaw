@@ -2,7 +2,7 @@
 
 ## 背景
 
-当前 CSGClaw 已经通过 `internal/sandbox` 抽象隔离 agent 运行环境，并提供了基于 vendored BoxLite Go SDK 的 `internal/sandbox/boxlite` adapter。为了降低 CGO、静态库下载、平台预编译包和 SDK 版本绑定带来的集成成本，可以新增一个基于 `boxlite` 命令行的 sandbox provider。
+当前 CSGClaw 已经通过 `internal/sandbox` 抽象隔离 agent 运行环境，并提供了基于 vendored BoxLite Go SDK 的 `internal/sandbox/boxlitesdk` adapter。为了降低 CGO、静态库下载、平台预编译包和 SDK 版本绑定带来的集成成本，可以新增一个基于 `boxlite` 命令行的 sandbox provider。
 
 本计划基于本地 `boxlite -h` 输出梳理。`boxlite` CLI 顶层能力包括：
 

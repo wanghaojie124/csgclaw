@@ -48,7 +48,7 @@ internal/sandbox/
 internal/agent  ─────► internal/sandbox
                          ▲
                          │
-                  internal/sandbox/boxlite ─────► third_party/boxlite-go
+                  internal/sandbox/boxlitesdk ─────► third_party/boxlite-go
 ```
 
 后续新增 Docker 或远程 sandbox 时，只增加新的 adapter 包，不改 agent service 主流程。
@@ -349,7 +349,7 @@ type Service struct {
 构造函数默认注入 BoxLite provider：
 
 ```go
-provider := boxliteadapter.NewProvider()
+provider := boxlitesdk.NewProvider()
 ```
 
 为了降低改动面，可以增加内部构造选项：
@@ -378,7 +378,7 @@ go test ./internal/sandbox
 
 ### 2. 实现 BoxLite adapter
 
-- 新增 `internal/sandbox/boxlite`。
+- 新增 `internal/sandbox/boxlitesdk`。
 - 将 `boxlite.Runtime` 包装为 `Runtime`。
 - 将 `boxlite.Box` 包装为 `Instance`。
 - 将通用 `CreateSpec` 转换为 `boxlite.BoxOption`。
@@ -390,7 +390,7 @@ go test ./internal/sandbox
 验证：
 
 ```bash
-go test ./internal/sandbox/boxlite
+go test ./internal/sandbox/boxlitesdk
 ```
 
 ### 3. 改造 agent runtime 边界
@@ -452,7 +452,7 @@ go test ./internal/config ./cli ./internal/api
 
 当 agent service 不再直接引用 BoxLite 后，BoxLite 依赖应只出现在：
 
-- `internal/sandbox/boxlite`
+- `internal/sandbox/boxlitesdk`
 - `third_party/boxlite-go`
 - build/setup 相关 Makefile 目标
 
