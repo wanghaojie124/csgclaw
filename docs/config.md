@@ -111,14 +111,10 @@ The `boxlite-cli` provider does not need the vendored Go SDK at runtime. `boxlit
 - `make build`, `make test`, and `make package` include the `boxlite_sdk` build tag, keeping the SDK-backed `boxlite-sdk` provider compiled in.
 - `make build-without-boxlite-sdk` and `make test-without-boxlite-sdk` skip that build tag, so the resulting binary excludes only the SDK-backed `boxlite-sdk` provider. `boxlite-cli` and other non-SDK providers remain compiled in.
 
-## Worker Override Example
+## Channel Configuration
 
-```json
-{
-  "id": "u-reviewer",
-  "name": "reviewer",
-  "description": "code review worker",
-  "profile": "codex.gpt-5.4",
-  "role": "worker"
-}
-```
+Channel integration is optional. CSGClaw works with the built-in Web UI by default, and you only need channel config when you want to connect external messaging platforms such as Feishu.
+
+Channel-specific settings live under top-level config sections such as `channels.feishu`. Keep the main config focused on shared server, model, bootstrap, and sandbox settings, then add only the channel blocks you actually use.
+
+For detailed field definitions and examples, see [Feishu Channel Configuration](channel/feishu.md).
