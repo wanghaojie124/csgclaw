@@ -501,10 +501,15 @@ manager_image = %q
 provider = %q
 home_dir_name = %q
 boxlite_cli_path = %q
+`, cfg.Server.ListenAddr, cfg.Server.AdvertiseBaseURL, partiallyMaskSecret(cfg.Server.AccessToken), cfg.Server.NoAuth, cfg.Bootstrap.ManagerImage, cfg.Sandbox.Resolved().Provider, cfg.Sandbox.Resolved().HomeDirName, cfg.Sandbox.Resolved().BoxLiteCLIPath)
+	if len(cfg.Bootstrap.DebianRegistries) > 0 {
+		content = strings.Replace(content, "\n[sandbox]\n", fmt.Sprintf("debian_registries = %s\n\n[sandbox]\n", formatModelList(cfg.Bootstrap.DebianRegistries)), 1)
+	}
+	content += fmt.Sprintf(`
 
 [models]
 default = %q
-`, cfg.Server.ListenAddr, cfg.Server.AdvertiseBaseURL, partiallyMaskSecret(cfg.Server.AccessToken), cfg.Server.NoAuth, cfg.Bootstrap.ManagerImage, cfg.Sandbox.Resolved().Provider, cfg.Sandbox.Resolved().HomeDirName, cfg.Sandbox.Resolved().BoxLiteCLIPath, llmCfg.DefaultSelector()) + formatEffectiveProviders(llmCfg)
+`, llmCfg.DefaultSelector()) + formatEffectiveProviders(llmCfg)
 
 	if strings.TrimSpace(cfg.Channels.FeishuAdminOpenID) != "" {
 		content += fmt.Sprintf(`
@@ -587,15 +592,15 @@ func newAgentService(cfg config.Config) (*agent.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	opts, err := sandboxServiceOptions(cfg.Sandbox)
+	opts, err := sandboxServiceOptions(cfg.Sandbox, cfg.Bootstrap)
 	if err != nil {
 		return nil, err
 	}
 	return agent.NewServiceWithLLMAndChannels(effectiveLLMConfig(cfg), cfg.Server, cfg.Channels, cfg.Bootstrap.ManagerImage, agentsPath, opts...)
 }
 
-func sandboxServiceOptions(cfg config.SandboxConfig) ([]agent.ServiceOption, error) {
-	return sandboxproviders.ServiceOptions(cfg)
+func sandboxServiceOptions(sandboxCfg config.SandboxConfig, bootstrapCfg config.BootstrapConfig) ([]agent.ServiceOption, error) {
+	return sandboxproviders.ServiceOptions(sandboxCfg, bootstrapCfg)
 }
 
 func newIMService() (*im.Service, error) {
@@ -699,3 +704,4 @@ func formatModelList(models []string) string {
 	}
 	return "[" + strings.Join(quoted, ", ") + "]"
 }
+
