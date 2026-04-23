@@ -224,87 +224,13 @@ Both CLIs are thin HTTP clients. They should not call stores, BoxLite, or channe
 
 `csgclaw-cli` is the lightweight CLI primarily intended for agents and scripts. It exposes only the bot, room, member, and message workflows that agents need for collaboration, and does not manage onboarding, the local server lifecycle, or agent runtime directly.
 
-```text
-csgclaw
-├── serve
-├── stop
-├── onboard
-├── agent
-│   ├── create
-│   ├── delete
-│   ├── status
-│   └── logs
-├── bot
-│   ├── list
-│   └── create
-├── room
-│   ├── list
-│   └── create
-├── member
-│   ├── list
-│   └── create
-├── user
-│   └── list
-└── message
+At a high level:
 
-csgclaw-cli
-├── bot
-│   ├── list
-│   └── create
-├── room
-│   ├── list
-│   └── create
-├── member
-│   ├── list
-│   └── create
-└── message
-```
+- `csgclaw` includes local operator workflows such as `onboard`, `serve`, `stop`, and agent management, plus shared collaboration commands.
+- `csgclaw-cli` keeps only the collaboration-oriented command groups needed by bots, agents, and scripts.
+- Shared collaboration commands select the target channel through flags and call the same local HTTP API surface.
 
-### Bot Commands
-
-```text
-csgclaw bot list   --channel <csgclaw|feishu>
-csgclaw bot create --channel <csgclaw|feishu>
-csgclaw-cli bot list   --channel <csgclaw|feishu>
-csgclaw-cli bot create --channel <csgclaw|feishu>
-```
-
-`--channel` defaults to `csgclaw`.
-
-Expected behavior:
-
-- `csgclaw bot list --channel csgclaw` calls `GET /api/v1/bots?channel=csgclaw`
-- `csgclaw bot list --channel feishu` calls `GET /api/v1/bots?channel=feishu`
-- `csgclaw bot create --channel csgclaw` calls `POST /api/v1/bots`
-- `csgclaw bot create --channel feishu` calls `POST /api/v1/bots`
-- `csgclaw-cli bot list --channel csgclaw` calls `GET /api/v1/bots?channel=csgclaw`
-- `csgclaw-cli bot list --channel feishu` calls `GET /api/v1/bots?channel=feishu`
-- `csgclaw-cli bot create --channel csgclaw` calls `POST /api/v1/bots`
-- `csgclaw-cli bot create --channel feishu` calls `POST /api/v1/bots`
-
-The selected channel is part of the request payload or query string, not a separate CLI implementation path.
-
-### Message Command
-
-`message` is available in both CLIs as a thin wrapper over the message API.
-
-```text
-csgclaw message create --channel <csgclaw|feishu> --room-id <id> --sender-id <id> --content <text> [--mention-id <id>]
-csgclaw-cli message create --channel <csgclaw|feishu> --room-id <id> --sender-id <id> --content <text> [--mention-id <id>]
-```
-
-Expected behavior:
-
-- `csgclaw message create --room-id room-1 --sender-id u-admin --content hello` calls `POST /api/v1/messages`
-- `csgclaw message create --channel feishu --room-id oc_alpha --sender-id u-manager --content hello` calls `POST /api/v1/channels/feishu/messages`
-- `csgclaw-cli message create --room-id room-1 --sender-id u-admin --content hello` calls `POST /api/v1/messages`
-- `csgclaw-cli message create --channel feishu --room-id oc_alpha --sender-id u-manager --content hello` calls `POST /api/v1/channels/feishu/messages`
-
-Validation rules:
-
-- `--channel` defaults to `csgclaw`.
-- `--room-id`, `--sender-id`, and `--content` are required.
-- `--mention-id` is optional and is forwarded as part of the create-message request.
+For the current command tree, flags, defaults, and examples, see [cli.md](./cli.md) or [cli.zh.md](./cli.zh.md).
 
 ---
 
