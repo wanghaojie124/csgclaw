@@ -502,8 +502,8 @@ provider = %q
 home_dir_name = %q
 boxlite_cli_path = %q
 `, cfg.Server.ListenAddr, cfg.Server.AdvertiseBaseURL, partiallyMaskSecret(cfg.Server.AccessToken), cfg.Server.NoAuth, cfg.Bootstrap.ManagerImage, cfg.Sandbox.Resolved().Provider, cfg.Sandbox.Resolved().HomeDirName, cfg.Sandbox.Resolved().BoxLiteCLIPath)
-	if len(cfg.Bootstrap.DebianRegistries) > 0 {
-		content = strings.Replace(content, "\n[sandbox]\n", fmt.Sprintf("debian_registries = %s\n\n[sandbox]\n", formatModelList(cfg.Bootstrap.DebianRegistries)), 1)
+	if len(cfg.Sandbox.Resolved().DebianRegistries) > 0 {
+		content = strings.Replace(content, "[sandbox]\n", fmt.Sprintf("[sandbox]\ndebian_registries = %s\n", formatModelList(cfg.Sandbox.Resolved().DebianRegistries)), 1)
 	}
 	content += fmt.Sprintf(`
 
@@ -592,7 +592,7 @@ func newAgentService(cfg config.Config) (*agent.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	opts, err := sandboxServiceOptions(cfg.Sandbox, cfg.Bootstrap)
+	opts, err := sandboxServiceOptions(cfg.Sandbox)
 	if err != nil {
 		return nil, err
 	}
