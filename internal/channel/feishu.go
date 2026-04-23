@@ -319,6 +319,51 @@ func (s *FeishuService) ListUsers() []im.User {
 	return users
 }
 
+func (s *FeishuService) DeleteUser(userID string) error {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return fmt.Errorf("user_id is required")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	user, ok := s.users[userID]
+	if !ok {
+		return fmt.Errorf("user not found")
+	}
+
+	delete(s.users, userID)
+	delete(s.byHandle, strings.ToLower(user.Handle))
+
+	for id, room := range s.rooms {
+		participants := make([]string, 0, len(room.Participants))
+		for _, participantID := range room.Participants {
+			if participantID != userID {
+				participants = append(participants, participantID)
+			}
+		}
+
+		messages := make([]im.Message, 0, len(room.Messages))
+		for _, message := range room.Messages {
+			if message.SenderID != userID {
+				messages = append(messages, message)
+			}
+		}
+
+		if len(participants) < 2 {
+			delete(s.rooms, id)
+			continue
+		}
+
+		room.Participants = participants
+		room.Messages = messages
+		room.Subtitle = formatMembers(len(participants))
+	}
+
+	return nil
+}
+
 func (s *FeishuService) ResolveBotUser(ctx context.Context, botID string) (im.User, bool, error) {
 	if s == nil {
 		return im.User{}, false, nil

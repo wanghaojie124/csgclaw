@@ -265,7 +265,7 @@ data: {"type":"message.created","room_id":"room-1","message":{"id":"msg-1","send
 
 ### `DELETE /api/v1/users/{id}`
 
-Kick 指定用户。
+删除指定用户。
 
 响应：`204 No Content`
 
@@ -273,7 +273,7 @@ Kick 指定用户。
 
 - 当前语义为“全局移除用户，并从所有会话成员及历史消息中清理该用户”
 - 若某个会话清理后剩余成员少于 2 人，该会话会被一并删除
-- 不允许 kick 当前用户；此时返回 `409 Conflict`
+- 不允许删除当前用户；此时返回 `409 Conflict`
 - 若用户不存在，返回 `404 Not Found`
 
 ### `GET /api/v1/messages`

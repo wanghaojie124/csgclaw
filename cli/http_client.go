@@ -70,8 +70,8 @@ func (c *APIClient) CreateFeishuUser(ctx context.Context, req channel.FeishuCrea
 	return created, nil
 }
 
-func (c *APIClient) KickUser(ctx context.Context, id string) error {
-	return c.DoNoContent(ctx, http.MethodDelete, "/api/v1/users/"+id)
+func (c *APIClient) DeleteUser(ctx context.Context, channel, id string) error {
+	return c.Client.DeleteUser(ctx, channel, id)
 }
 
 func extractAPIError(resp *http.Response) error {

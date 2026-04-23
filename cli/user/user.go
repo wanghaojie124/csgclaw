@@ -40,8 +40,8 @@ func (c cmd) Run(ctx context.Context, run *command.Context, args []string, globa
 		return c.runList(ctx, run, args[1:], globals)
 	case "create":
 		return c.runCreate(ctx, run, args[1:], globals)
-	case "kick":
-		return c.runKick(ctx, run, args[1:], globals)
+	case "delete":
+		return c.runDelete(ctx, run, args[1:], globals)
 	default:
 		c.usage(run)
 		return fmt.Errorf("unknown user subcommand %q", args[0])
@@ -52,7 +52,7 @@ func (c cmd) usage(run *command.Context) {
 	run.UsageCommandGroup(c, run.Program+" user <subcommand> [flags]", []string{
 		"list               List users",
 		"create             Create a user",
-		"kick <id>          Remove a user",
+		"delete <id>        Remove a user",
 	})
 }
 
@@ -105,23 +105,24 @@ func (c cmd) runCreate(ctx context.Context, run *command.Context, args []string,
 	return command.RenderUsers(globals.Output, run.Stdout, []apitypes.User{user})
 }
 
-func (c cmd) runKick(ctx context.Context, run *command.Context, args []string, globals command.GlobalOptions) error {
-	fs := run.NewFlagSet("user kick", run.Program+" user kick <id> [flags]", "Remove a user.")
+func (c cmd) runDelete(ctx context.Context, run *command.Context, args []string, globals command.GlobalOptions) error {
+	fs := run.NewFlagSet("user delete", run.Program+" user delete <id> [flags]", "Remove a user.")
+	channelName := fs.String("channel", "csgclaw", "channel name: csgclaw or feishu")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
 	rest := fs.Args()
 	if len(rest) != 1 {
-		return fmt.Errorf("user kick requires exactly one id")
+		return fmt.Errorf("user delete requires exactly one id")
 	}
 
-	if err := run.APIClient(globals).DoNoContent(ctx, http.MethodDelete, "/api/v1/users/"+rest[0]); err != nil {
+	if err := run.APIClient(globals).DeleteUser(ctx, *channelName, rest[0]); err != nil {
 		return err
 	}
 	return command.RenderAction(globals.Output, run.Stdout, command.ActionResult{
 		Command: "user",
-		Action:  "kick",
+		Action:  "delete",
 		Status:  "removed",
 		ID:      rest[0],
 		Message: fmt.Sprintf("removed user %s", rest[0]),

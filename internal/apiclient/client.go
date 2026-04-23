@@ -188,6 +188,14 @@ func (c *Client) ListUsersByChannel(ctx context.Context, channel string) ([]apit
 	return users, nil
 }
 
+func (c *Client) DeleteUser(ctx context.Context, channel, id string) error {
+	path, err := userDeletePath(channel, id)
+	if err != nil {
+		return err
+	}
+	return c.DoNoContent(ctx, http.MethodDelete, path)
+}
+
 func (c *Client) Stream(ctx context.Context, path string, values url.Values, w io.Writer) error {
 	if encoded := values.Encode(); encoded != "" {
 		path += "?" + encoded
@@ -339,6 +347,22 @@ func roomDeletePath(channelName, roomID string) (string, error) {
 		return "/api/v1/rooms/" + url.PathEscape(roomID), nil
 	case "feishu":
 		return "/api/v1/channels/feishu/rooms/" + url.PathEscape(roomID), nil
+	default:
+		return "", fmt.Errorf("unsupported channel %q", channelName)
+	}
+}
+
+func userDeletePath(channelName, userID string) (string, error) {
+	channelName = strings.ToLower(strings.TrimSpace(channelName))
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return "", fmt.Errorf("user id is required")
+	}
+	switch channelName {
+	case "", "csgclaw":
+		return "/api/v1/users/" + url.PathEscape(userID), nil
+	case "feishu":
+		return "/api/v1/channels/feishu/users/" + url.PathEscape(userID), nil
 	default:
 		return "", fmt.Errorf("unsupported channel %q", channelName)
 	}

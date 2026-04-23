@@ -1656,6 +1656,26 @@ func TestHandleUsersDeleteCurrentUserReturnsConflict(t *testing.T) {
 	}
 }
 
+func TestHandleFeishuUsersDeleteRemovesUser(t *testing.T) {
+	srv := &Handler{
+		feishu: channel.NewFeishuService(),
+	}
+	if _, err := srv.feishu.CreateUser(channel.FeishuCreateUserRequest{ID: "ou-alice", Name: "Alice"}); err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/channels/feishu/users/ou-alice", nil)
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusNoContent, rec.Body.String())
+	}
+	if containsUser(srv.feishu.ListUsers(), "ou-alice") {
+		t.Fatal("containsUser() = true, want false after delete")
+	}
+}
+
 func TestHandleRoomsDeleteRemovesRoom(t *testing.T) {
 	srv := &Handler{
 		im: im.NewServiceFromBootstrap(im.Bootstrap{

@@ -156,6 +156,24 @@ func TestFeishuEnsureUserUsesConfiguredOpenID(t *testing.T) {
 	}
 }
 
+func TestFeishuDeleteUserRemovesUser(t *testing.T) {
+	svc := NewFeishuService()
+
+	if _, err := svc.CreateUser(FeishuCreateUserRequest{ID: "ou_alice", Name: "Alice"}); err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+	if err := svc.DeleteUser("ou_alice"); err != nil {
+		t.Fatalf("DeleteUser() error = %v", err)
+	}
+
+	users := svc.ListUsers()
+	for _, user := range users {
+		if user.ID == "ou_alice" {
+			t.Fatal("ListUsers() still contains deleted user")
+		}
+	}
+}
+
 func TestFeishuBotMembersInChatWithResolversIncludesConfiguredBots(t *testing.T) {
 	apps := map[string]FeishuAppConfig{
 		"u-manager": {AppID: "cli_manager", AppSecret: "manager-secret"},
