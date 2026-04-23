@@ -1678,6 +1678,30 @@ func TestHandleRoomsDeleteRemovesRoom(t *testing.T) {
 	}
 }
 
+func TestHandleFeishuRoomsDeleteRemovesRoom(t *testing.T) {
+	deleted := make([]string, 0, 1)
+	srv := &Handler{
+		feishu: channel.NewFeishuServiceWithDeleteChat(
+			map[string]channel.FeishuAppConfig{"u-manager": {AppID: "cli_manager", AppSecret: "manager-secret", AdminOpenID: "ou_admin"}},
+			func(_ context.Context, _ channel.FeishuAppConfig, roomID string) error {
+				deleted = append(deleted, roomID)
+				return nil
+			},
+		),
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/channels/feishu/rooms/oc_alpha", nil)
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusNoContent, rec.Body.String())
+	}
+	if len(deleted) != 1 || deleted[0] != "oc_alpha" {
+		t.Fatalf("deleted = %+v, want [oc_alpha]", deleted)
+	}
+}
+
 func TestHandlePicoClawRoutesRequireAuthorization(t *testing.T) {
 	srv := &Handler{
 		im:       im.NewService(),

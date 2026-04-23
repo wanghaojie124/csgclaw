@@ -1022,6 +1022,31 @@ func TestExecuteRoomDeleteUsesHTTPClient(t *testing.T) {
 	}
 }
 
+func TestExecuteRoomDeleteUsesFeishuChannelRoute(t *testing.T) {
+	app := &App{
+		stdout: &bytes.Buffer{},
+		stderr: &bytes.Buffer{},
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodDelete {
+				t.Fatalf("method = %q, want %q", req.Method, http.MethodDelete)
+			}
+			if req.URL.String() != "http://example.test/api/v1/channels/feishu/rooms/oc_alpha" {
+				t.Fatalf("url = %q, want %q", req.URL.String(), "http://example.test/api/v1/channels/feishu/rooms/oc_alpha")
+			}
+			return &http.Response{
+				StatusCode: http.StatusNoContent,
+				Status:     http.StatusText(http.StatusNoContent),
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader("")),
+			}, nil
+		}),
+	}
+
+	if err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "room", "delete", "--channel", "feishu", "oc_alpha"}); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+}
+
 func TestExecuteUserListUsesHTTPClient(t *testing.T) {
 	var stdout bytes.Buffer
 	app := &App{

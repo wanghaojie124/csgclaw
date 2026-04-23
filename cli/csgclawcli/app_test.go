@@ -274,6 +274,33 @@ func TestExecuteRoomCreateUsesChannelRoute(t *testing.T) {
 	assertTableHasRow(t, stdout.String(), "oc_alpha", "alpha", "1", "0")
 }
 
+func TestExecuteRoomDeleteUsesChannelRoute(t *testing.T) {
+	var stdout bytes.Buffer
+	app := &App{
+		stdout: &stdout,
+		stderr: &bytes.Buffer{},
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodDelete {
+				t.Fatalf("method = %q, want %q", req.Method, http.MethodDelete)
+			}
+			if req.URL.String() != "http://example.test/api/v1/channels/feishu/rooms/oc_alpha" {
+				t.Fatalf("url = %q, want feishu room delete route", req.URL.String())
+			}
+			return jsonResponse(http.StatusNoContent, ``), nil
+		}),
+	}
+
+	err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "--output", "json", "room", "delete", "--channel", "feishu", "oc_alpha"})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	for _, want := range []string{`"command": "room"`, `"action": "delete"`, `"status": "deleted"`, `"id": "oc_alpha"`, `"channel": "feishu"`} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("stdout = %q, want %s", stdout.String(), want)
+		}
+	}
+}
+
 func TestExecuteMessageCreateUsesChannelRoute(t *testing.T) {
 	var stdout bytes.Buffer
 	app := &App{

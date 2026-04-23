@@ -213,9 +213,27 @@ func (h *Handler) handleFeishuRoomByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	roomID, ok := parseFeishuRoomMembersPath(r.URL.Path)
-	if !ok {
+	roomID, membersPath := parseFeishuRoomPath(r.URL.Path)
+	if roomID == "" {
 		http.NotFound(w, r)
+		return
+	}
+
+	if !membersPath {
+		switch r.Method {
+		case http.MethodDelete:
+			if err := h.feishu.DeleteRoom(roomID); err != nil {
+				if strings.Contains(err.Error(), "not found") {
+					http.Error(w, "room not found", http.StatusNotFound)
+					return
+				}
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
 		return
 	}
 
@@ -253,14 +271,19 @@ func (h *Handler) handleFeishuRoomByID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func parseFeishuRoomMembersPath(path string) (string, bool) {
+func parseFeishuRoomPath(path string) (string, bool) {
 	const prefix = "/api/v1/channels/feishu/rooms/"
 	if !strings.HasPrefix(path, prefix) {
 		return "", false
 	}
 	rest := strings.TrimPrefix(path, prefix)
 	roomID, suffix, ok := strings.Cut(rest, "/")
-	if !ok || strings.TrimSpace(roomID) == "" || suffix != "members" {
+	if !ok {
+		roomID = strings.TrimSpace(rest)
+		return roomID, false
+	}
+	roomID = strings.TrimSpace(roomID)
+	if roomID == "" || suffix != "members" {
 		return "", false
 	}
 	return roomID, true

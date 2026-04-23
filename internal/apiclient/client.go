@@ -164,8 +164,12 @@ func (c *Client) ListRoomMembersByChannel(ctx context.Context, channel, roomID s
 	return users, nil
 }
 
-func (c *Client) DeleteRoom(ctx context.Context, id string) error {
-	return c.DoNoContent(ctx, http.MethodDelete, "/api/v1/rooms/"+id)
+func (c *Client) DeleteRoom(ctx context.Context, channel, id string) error {
+	path, err := roomDeletePath(channel, id)
+	if err != nil {
+		return err
+	}
+	return c.DoNoContent(ctx, http.MethodDelete, path)
 }
 
 func (c *Client) ListUsers(ctx context.Context) ([]apitypes.User, error) {
@@ -319,6 +323,22 @@ func roomMembersPath(channelName, roomID, operation string) (string, error) {
 		return "/api/v1/channels/feishu/rooms/" + url.PathEscape(roomID) + "/members", nil
 	case "", "csgclaw":
 		return "/api/v1/rooms/" + url.PathEscape(roomID) + "/members", nil
+	default:
+		return "", fmt.Errorf("unsupported channel %q", channelName)
+	}
+}
+
+func roomDeletePath(channelName, roomID string) (string, error) {
+	channelName = strings.ToLower(strings.TrimSpace(channelName))
+	roomID = strings.TrimSpace(roomID)
+	if roomID == "" {
+		return "", fmt.Errorf("room id is required")
+	}
+	switch channelName {
+	case "", "csgclaw":
+		return "/api/v1/rooms/" + url.PathEscape(roomID), nil
+	case "feishu":
+		return "/api/v1/channels/feishu/rooms/" + url.PathEscape(roomID), nil
 	default:
 		return "", fmt.Errorf("unsupported channel %q", channelName)
 	}

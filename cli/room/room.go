@@ -101,6 +101,7 @@ func (c cmd) runCreate(ctx context.Context, run *command.Context, args []string,
 
 func (c cmd) runDelete(ctx context.Context, run *command.Context, args []string, globals command.GlobalOptions) error {
 	fs := run.NewFlagSet("room delete", run.Program+" room delete <id> [flags]", "Delete a room.")
+	channelName := fs.String("channel", "csgclaw", "channel name: csgclaw or feishu")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -110,7 +111,7 @@ func (c cmd) runDelete(ctx context.Context, run *command.Context, args []string,
 		return fmt.Errorf("room delete requires exactly one id")
 	}
 
-	if err := run.APIClient(globals).DeleteRoom(ctx, rest[0]); err != nil {
+	if err := run.APIClient(globals).DeleteRoom(ctx, *channelName, rest[0]); err != nil {
 		return err
 	}
 	return command.RenderAction(globals.Output, run.Stdout, command.ActionResult{
@@ -118,6 +119,7 @@ func (c cmd) runDelete(ctx context.Context, run *command.Context, args []string,
 		Action:  "delete",
 		Status:  "deleted",
 		ID:      rest[0],
-		Message: fmt.Sprintf("deleted room %s", rest[0]),
+		Channel: *channelName,
+		Message: fmt.Sprintf("deleted %s room %s", *channelName, rest[0]),
 	})
 }

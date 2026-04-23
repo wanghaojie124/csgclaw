@@ -225,6 +225,29 @@ func TestFeishuCreateRoomUsesConfiguredAdminOpenID(t *testing.T) {
 	}
 }
 
+func TestFeishuDeleteRoomUsesConfiguredApp(t *testing.T) {
+	var gotApp FeishuAppConfig
+	var gotRoomID string
+	svc := NewFeishuServiceWithDeleteChat(
+		map[string]FeishuAppConfig{"u-manager": {AppID: "cli_manager", AppSecret: "manager-secret", AdminOpenID: "ou_admin"}},
+		func(_ context.Context, app FeishuAppConfig, roomID string) error {
+			gotApp = app
+			gotRoomID = roomID
+			return nil
+		},
+	)
+
+	if err := svc.DeleteRoom("oc_alpha"); err != nil {
+		t.Fatalf("DeleteRoom() error = %v", err)
+	}
+	if got, want := gotApp.AppID, "cli_manager"; got != want {
+		t.Fatalf("delete app_id = %q, want %q", got, want)
+	}
+	if got, want := gotRoomID, "oc_alpha"; got != want {
+		t.Fatalf("delete room_id = %q, want %q", got, want)
+	}
+}
+
 func TestFeishuSendMessageUsesSenderAppAndStoresLocalMessage(t *testing.T) {
 	var gotApp FeishuAppConfig
 	var gotReq FeishuSendMessageRequest

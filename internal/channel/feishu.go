@@ -71,6 +71,8 @@ type FeishuListChatsFunc func(context.Context, FeishuAppConfig) ([]im.Room, erro
 
 type FeishuListRoomMessagesFunc func(context.Context, FeishuAppConfig, string) ([]im.Message, error)
 
+type FeishuDeleteChatFunc func(context.Context, FeishuAppConfig, string) error
+
 type FeishuSendMessageRequest struct {
 	ChatID           string
 	Content          string
@@ -99,6 +101,7 @@ type FeishuService struct {
 	listChatMembers  FeishuListChatMembersFunc
 	listChats        FeishuListChatsFunc
 	listRoomMessages FeishuListRoomMessagesFunc
+	deleteChat       FeishuDeleteChatFunc
 	sendMessage      FeishuSendMessageFunc
 	messageBus       *FeishuMessageBus
 }
@@ -121,6 +124,7 @@ func NewFeishuService(apps ...map[string]FeishuAppConfig) *FeishuService {
 		listChatMembers:  defaultFeishuListChatMembers,
 		listChats:        defaultFeishuListChats,
 		listRoomMessages: defaultFeishuListRoomMessages,
+		deleteChat:       defaultFeishuDeleteChat,
 		sendMessage:      defaultFeishuSendMessage,
 		messageBus:       NewFeishuMessageBus(),
 	}
@@ -157,6 +161,14 @@ func NewFeishuServiceWithListRoomMessages(apps map[string]FeishuAppConfig, listR
 	svc := NewFeishuService(apps)
 	if listRoomMessages != nil {
 		svc.listRoomMessages = listRoomMessages
+	}
+	return svc
+}
+
+func NewFeishuServiceWithDeleteChat(apps map[string]FeishuAppConfig, deleteChat FeishuDeleteChatFunc) *FeishuService {
+	svc := NewFeishuService(apps)
+	if deleteChat != nil {
+		svc.deleteChat = deleteChat
 	}
 	return svc
 }
@@ -477,6 +489,20 @@ func defaultFeishuAddChatMembers(ctx context.Context, app FeishuAppConfig, req F
 	}
 	if !resp.Success() {
 		return fmt.Errorf("add feishu chat members: code=%d msg=%s request_id=%s", resp.Code, resp.Msg, resp.RequestId())
+	}
+	return nil
+}
+
+func defaultFeishuDeleteChat(ctx context.Context, app FeishuAppConfig, chatID string) error {
+	client := lark.NewClient(app.AppID, app.AppSecret)
+	resp, err := client.Im.V1.Chat.Delete(ctx, larkim.NewDeleteChatReqBuilder().
+		ChatId(chatID).
+		Build())
+	if err != nil {
+		return fmt.Errorf("delete feishu chat: %w", err)
+	}
+	if !resp.Success() {
+		return fmt.Errorf("delete feishu chat: code=%d msg=%s request_id=%s", resp.Code, resp.Msg, resp.RequestId())
 	}
 	return nil
 }
@@ -1046,6 +1072,26 @@ func (s *FeishuService) ListRoomMessages(roomID string) ([]im.Message, error) {
 	s.mu.Unlock()
 
 	return append([]im.Message(nil), messages...), nil
+}
+
+func (s *FeishuService) DeleteRoom(roomID string) error {
+	roomID = strings.TrimSpace(roomID)
+	if roomID == "" {
+		return fmt.Errorf("room_id is required")
+	}
+
+	app, err := s.appConfigForRoom(roomID)
+	if err != nil {
+		return err
+	}
+	if err := s.deleteChat(context.Background(), app, roomID); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	delete(s.rooms, roomID)
+	s.mu.Unlock()
+	return nil
 }
 
 func (s *FeishuService) AddRoomMembers(req im.AddRoomMembersRequest) (im.Room, error) {
