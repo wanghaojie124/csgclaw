@@ -53,7 +53,7 @@ func (c cmd) usage(run *command.Context) {
 
 func (c cmd) runList(ctx context.Context, run *command.Context, args []string, globals command.GlobalOptions) error {
 	fs := run.NewFlagSet("member list", run.Program+" member list [flags]", "List room members.")
-	channelName := fs.String("channel", "feishu", "channel name: csgclaw or feishu")
+	channelName := fs.String("channel", "csgclaw", "channel name: csgclaw or feishu")
 	roomID := fs.String("room-id", "", "target room id")
 	if err := fs.Parse(args); err != nil {
 		return err

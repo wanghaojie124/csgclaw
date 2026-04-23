@@ -329,7 +329,7 @@ func TestExecuteMessageListUsesChannelRoute(t *testing.T) {
 	}
 }
 
-func TestExecuteMemberListUsesFeishuDefault(t *testing.T) {
+func TestExecuteMemberListUsesCSGClawDefault(t *testing.T) {
 	var stdout bytes.Buffer
 	app := &App{
 		stdout: &stdout,
@@ -338,10 +338,10 @@ func TestExecuteMemberListUsesFeishuDefault(t *testing.T) {
 			if req.Method != http.MethodGet {
 				t.Fatalf("method = %q, want %q", req.Method, http.MethodGet)
 			}
-			if req.URL.String() != "http://example.test/api/v1/channels/feishu/rooms/oc_alpha/members" {
-				t.Fatalf("url = %q, want feishu room members route", req.URL.String())
+			if req.URL.String() != "http://example.test/api/v1/rooms/oc_alpha/members" {
+				t.Fatalf("url = %q, want csgclaw room members route", req.URL.String())
 			}
-			return jsonResponse(http.StatusOK, `[{"id":"ou_alice","name":"Alice","handle":"alice","role":"worker","is_online":true}]`), nil
+			return jsonResponse(http.StatusOK, `[{"id":"u_alice","name":"Alice","handle":"alice","role":"worker","is_online":true}]`), nil
 		}),
 	}
 
@@ -349,7 +349,7 @@ func TestExecuteMemberListUsesFeishuDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	assertTableHasRow(t, stdout.String(), "ou_alice", "Alice", "alice", "worker", "true")
+	assertTableHasRow(t, stdout.String(), "u_alice", "Alice", "alice", "worker", "true")
 }
 
 func TestExecuteVersionFlagPrintsCsgclawCLIVersion(t *testing.T) {
