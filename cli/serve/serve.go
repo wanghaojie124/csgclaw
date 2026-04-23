@@ -340,6 +340,7 @@ func startServer(ctx context.Context, cfg config.Config, svc *agent.Service, bot
 		Feishu:      feishuSvc,
 		LLM:         llmSvc,
 		AccessToken: cfg.Server.AccessToken,
+		NoAuth:      cfg.Server.NoAuth,
 		Context:     ctx,
 	})
 }
@@ -491,6 +492,7 @@ func formatEffectiveConfig(cfg config.Config) string {
 listen_addr = %q
 advertise_base_url = %q
 access_token = %q
+no_auth = %t
 
 [bootstrap]
 manager_image = %q
@@ -502,7 +504,7 @@ boxlite_cli_path = %q
 
 [models]
 default = %q
-`, cfg.Server.ListenAddr, cfg.Server.AdvertiseBaseURL, partiallyMaskSecret(cfg.Server.AccessToken), cfg.Bootstrap.ManagerImage, cfg.Sandbox.Resolved().Provider, cfg.Sandbox.Resolved().HomeDirName, cfg.Sandbox.Resolved().BoxLiteCLIPath, llmCfg.DefaultSelector()) + formatEffectiveProviders(llmCfg)
+`, cfg.Server.ListenAddr, cfg.Server.AdvertiseBaseURL, partiallyMaskSecret(cfg.Server.AccessToken), cfg.Server.NoAuth, cfg.Bootstrap.ManagerImage, cfg.Sandbox.Resolved().Provider, cfg.Sandbox.Resolved().HomeDirName, cfg.Sandbox.Resolved().BoxLiteCLIPath, llmCfg.DefaultSelector()) + formatEffectiveProviders(llmCfg)
 
 	if strings.TrimSpace(cfg.Channels.FeishuAdminOpenID) != "" {
 		content += fmt.Sprintf(`
