@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -207,6 +209,75 @@ func TestServeForegroundPassesContextToServer(t *testing.T) {
 	}
 	if strings.Contains(got, "manager-secret") {
 		t.Fatalf("stdout leaked feishu app secret:\n%s", got)
+	}
+}
+
+func TestFormatEffectiveConfigPrintsExpandedMaskedEnvValues(t *testing.T) {
+	t.Setenv("PORT", "18080")
+	t.Setenv("IP", "1.2.3.4")
+	t.Setenv("ACCESS_TOKEN", "pc-env-secret")
+	t.Setenv("MODEL_SELECTOR", "remote.gpt-env")
+	t.Setenv("MODEL_BASE_HOST", "models.example.test")
+	t.Setenv("MODEL_API_KEY", "sk-env-secret")
+	t.Setenv("MODEL_ID", "gpt-env")
+	t.Setenv("FEISHU_APP_ID", "cli_env")
+	t.Setenv("FEISHU_APP_SECRET", "feishu-env-secret")
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := `[server]
+listen_addr = "0.0.0.0:${PORT}"
+advertise_base_url = "http://${IP}:${PORT}"
+access_token = "${ACCESS_TOKEN}"
+
+[models]
+default = "${MODEL_SELECTOR}"
+
+[models.providers.remote]
+base_url = "https://${MODEL_BASE_HOST}/v1"
+api_key = "${MODEL_API_KEY}"
+models = ["${MODEL_ID}"]
+
+[channels.feishu.manager]
+app_id = "${FEISHU_APP_ID}"
+app_secret = "${FEISHU_APP_SECRET}"
+`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	got := formatEffectiveConfig(cfg)
+	for _, want := range []string{
+		`listen_addr = "0.0.0.0:18080"`,
+		`advertise_base_url = "http://1.2.3.4:18080"`,
+		`access_token = "pc*********et"`,
+		`default = "remote.gpt-env"`,
+		`base_url = "https://models.example.test/v1"`,
+		`api_key = "sk*********et"`,
+		`models = ["gpt-env"]`,
+		`app_id = "cli_env"`,
+		`app_secret = "fe*************et"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("effective config missing %q:\n%s", want, got)
+		}
+	}
+	for _, leaked := range []string{
+		"${PORT}",
+		"${ACCESS_TOKEN}",
+		"${MODEL_API_KEY}",
+		"${FEISHU_APP_SECRET}",
+		"pc-env-secret",
+		"sk-env-secret",
+		"feishu-env-secret",
+	} {
+		if strings.Contains(got, leaked) {
+			t.Fatalf("effective config leaked %q:\n%s", leaked, got)
+		}
 	}
 }
 

@@ -419,6 +419,304 @@ func TestSaveWritesCSGHubLiteProvider(t *testing.T) {
 	}
 }
 
+func TestLoadExpandsServerEnvValues(t *testing.T) {
+	t.Setenv("IP", "1.2.3.4")
+	t.Setenv("PORT", "18080")
+	t.Setenv("ACCESS_TOKEN", "your_access_token")
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := `[server]
+listen_addr = "0.0.0.0:${PORT}"
+advertise_base_url = "http://${IP}:${PORT}"
+access_token = "${ACCESS_TOKEN}"
+
+[models]
+default = "default.gpt-test"
+
+[models.providers.default]
+base_url = "http://127.0.0.1:4000"
+api_key = "sk"
+models = ["gpt-test"]
+`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if got, want := cfg.Server.ListenAddr, "0.0.0.0:18080"; got != want {
+		t.Fatalf("cfg.Server.ListenAddr = %q, want %q", got, want)
+	}
+	if got, want := cfg.Server.AdvertiseBaseURL, "http://1.2.3.4:18080"; got != want {
+		t.Fatalf("cfg.Server.AdvertiseBaseURL = %q, want %q", got, want)
+	}
+	if got, want := cfg.Server.AccessToken, "your_access_token"; got != want {
+		t.Fatalf("cfg.Server.AccessToken = %q, want %q", got, want)
+	}
+}
+
+func TestLoadExpandsNonServerEnvValues(t *testing.T) {
+	t.Setenv("MANAGER_IMAGE", "picoclaw:test")
+	t.Setenv("SANDBOX_PROVIDER", BoxLiteCLIProvider)
+	t.Setenv("SANDBOX_HOME", "env-home")
+	t.Setenv("BOXLITE_PATH", "/env/bin/boxlite")
+	t.Setenv("MODEL_SELECTOR", "remote.gpt-env")
+	t.Setenv("MODEL_BASE_HOST", "models.example.test")
+	t.Setenv("MODEL_API_KEY", "sk-env")
+	t.Setenv("MODEL_ID", "gpt-env")
+	t.Setenv("REASONING_EFFORT", "HIGH")
+	t.Setenv("FEISHU_ADMIN_OPEN_ID", "ou_env_admin")
+	t.Setenv("FEISHU_APP_ID", "cli_env")
+	t.Setenv("FEISHU_APP_SECRET", "feishu-env-secret")
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := `[server]
+listen_addr = "127.0.0.1:18080"
+
+[bootstrap]
+manager_image = "${MANAGER_IMAGE}"
+
+[sandbox]
+provider = "${SANDBOX_PROVIDER}"
+home_dir_name = "${SANDBOX_HOME}"
+boxlite_cli_path = "${BOXLITE_PATH}"
+
+[models]
+default = "${MODEL_SELECTOR}"
+
+[models.providers.remote]
+base_url = "https://${MODEL_BASE_HOST}/v1"
+api_key = "${MODEL_API_KEY}"
+models = ["${MODEL_ID}", "gpt-static"]
+reasoning_effort = "${REASONING_EFFORT}"
+
+[channels.feishu]
+admin_open_id = "${FEISHU_ADMIN_OPEN_ID}"
+
+[channels.feishu.manager]
+app_id = "${FEISHU_APP_ID}"
+app_secret = "${FEISHU_APP_SECRET}"
+`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if got, want := cfg.Bootstrap.ManagerImage, "picoclaw:test"; got != want {
+		t.Fatalf("cfg.Bootstrap.ManagerImage = %q, want %q", got, want)
+	}
+	if got, want := cfg.Sandbox.Provider, BoxLiteCLIProvider; got != want {
+		t.Fatalf("cfg.Sandbox.Provider = %q, want %q", got, want)
+	}
+	if got, want := cfg.Sandbox.HomeDirName, "env-home"; got != want {
+		t.Fatalf("cfg.Sandbox.HomeDirName = %q, want %q", got, want)
+	}
+	if got, want := cfg.Sandbox.BoxLiteCLIPath, "/env/bin/boxlite"; got != want {
+		t.Fatalf("cfg.Sandbox.BoxLiteCLIPath = %q, want %q", got, want)
+	}
+	if got, want := cfg.Models.Default, "remote.gpt-env"; got != want {
+		t.Fatalf("cfg.Models.Default = %q, want %q", got, want)
+	}
+	if got, want := cfg.Model.BaseURL, "https://models.example.test/v1"; got != want {
+		t.Fatalf("cfg.Model.BaseURL = %q, want %q", got, want)
+	}
+	if got, want := cfg.Model.APIKey, "sk-env"; got != want {
+		t.Fatalf("cfg.Model.APIKey = %q, want %q", got, want)
+	}
+	if got, want := cfg.Model.ModelID, "gpt-env"; got != want {
+		t.Fatalf("cfg.Model.ModelID = %q, want %q", got, want)
+	}
+	if got, want := cfg.Models.Providers["remote"].ReasoningEffort, "high"; got != want {
+		t.Fatalf("cfg.Models.Providers[remote].ReasoningEffort = %q, want %q", got, want)
+	}
+	if got, want := strings.Join(cfg.Models.Providers["remote"].Models, ","), "gpt-env,gpt-static"; got != want {
+		t.Fatalf("cfg.Models.Providers[remote].Models = %q, want %q", got, want)
+	}
+	if got, want := cfg.Channels.FeishuAdminOpenID, "ou_env_admin"; got != want {
+		t.Fatalf("cfg.Channels.FeishuAdminOpenID = %q, want %q", got, want)
+	}
+	if got, want := cfg.Channels.Feishu["manager"].AppID, "cli_env"; got != want {
+		t.Fatalf("cfg.Channels.Feishu[manager].AppID = %q, want %q", got, want)
+	}
+	if got, want := cfg.Channels.Feishu["manager"].AppSecret, "feishu-env-secret"; got != want {
+		t.Fatalf("cfg.Channels.Feishu[manager].AppSecret = %q, want %q", got, want)
+	}
+}
+
+func TestSavePreservesEnvPlaceholdersAfterLoad(t *testing.T) {
+	t.Setenv("IP", "1.2.3.4")
+	t.Setenv("PORT", "18080")
+	t.Setenv("ACCESS_TOKEN", "your_access_token")
+	t.Setenv("MANAGER_IMAGE", "picoclaw:test")
+	t.Setenv("SANDBOX_PROVIDER", BoxLiteCLIProvider)
+	t.Setenv("SANDBOX_HOME", "env-home")
+	t.Setenv("BOXLITE_PATH", "/env/bin/boxlite")
+	t.Setenv("MODEL_SELECTOR", "remote.gpt-env")
+	t.Setenv("MODEL_BASE_HOST", "models.example.test")
+	t.Setenv("MODEL_API_KEY", "sk-env")
+	t.Setenv("MODEL_ID", "gpt-env")
+	t.Setenv("REASONING_EFFORT", "medium")
+	t.Setenv("FEISHU_ADMIN_OPEN_ID", "ou_env_admin")
+	t.Setenv("FEISHU_APP_ID", "cli_env")
+	t.Setenv("FEISHU_APP_SECRET", "feishu-env-secret")
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := `[server]
+listen_addr = "0.0.0.0:${PORT}"
+advertise_base_url = "http://${IP}:${PORT}"
+access_token = "${ACCESS_TOKEN}"
+
+[bootstrap]
+manager_image = "${MANAGER_IMAGE}"
+
+[sandbox]
+provider = "${SANDBOX_PROVIDER}"
+home_dir_name = "${SANDBOX_HOME}"
+boxlite_cli_path = "${BOXLITE_PATH}"
+
+[models]
+default = "${MODEL_SELECTOR}"
+
+[models.providers.remote]
+base_url = "https://${MODEL_BASE_HOST}/v1"
+api_key = "${MODEL_API_KEY}"
+models = ["${MODEL_ID}", "gpt-static"]
+reasoning_effort = "${REASONING_EFFORT}"
+
+[channels.feishu]
+admin_open_id = "${FEISHU_ADMIN_OPEN_ID}"
+
+[channels.feishu.manager]
+app_id = "${FEISHU_APP_ID}"
+app_secret = "${FEISHU_APP_SECRET}"
+`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	t.Setenv("IP", "5.6.7.8")
+	t.Setenv("PORT", "19090")
+	t.Setenv("ACCESS_TOKEN", "changed_access_token")
+	t.Setenv("MANAGER_IMAGE", "changed-image")
+	t.Setenv("MODEL_API_KEY", "changed-model-key")
+	t.Setenv("FEISHU_APP_SECRET", "changed-feishu-secret")
+
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	saved := string(data)
+	for _, want := range []string{
+		`listen_addr = "0.0.0.0:${PORT}"`,
+		`advertise_base_url = "http://${IP}:${PORT}"`,
+		`access_token = "${ACCESS_TOKEN}"`,
+		`manager_image = "${MANAGER_IMAGE}"`,
+		`provider = "${SANDBOX_PROVIDER}"`,
+		`home_dir_name = "${SANDBOX_HOME}"`,
+		`boxlite_cli_path = "${BOXLITE_PATH}"`,
+		`default = "${MODEL_SELECTOR}"`,
+		`base_url = "https://${MODEL_BASE_HOST}/v1"`,
+		`api_key = "${MODEL_API_KEY}"`,
+		`models = ["${MODEL_ID}", "gpt-static"]`,
+		`reasoning_effort = "${REASONING_EFFORT}"`,
+		`admin_open_id = "${FEISHU_ADMIN_OPEN_ID}"`,
+		`app_id = "${FEISHU_APP_ID}"`,
+		`app_secret = "${FEISHU_APP_SECRET}"`,
+	} {
+		if !strings.Contains(saved, want) {
+			t.Fatalf("saved config missing %q:\n%s", want, saved)
+		}
+	}
+}
+
+func TestSaveUsesResolvedValuesAfterConfigMutation(t *testing.T) {
+	t.Setenv("IP", "1.2.3.4")
+	t.Setenv("PORT", "18080")
+	t.Setenv("ACCESS_TOKEN", "your_access_token")
+	t.Setenv("MODEL_ID", "gpt-env")
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := `[server]
+listen_addr = "0.0.0.0:${PORT}"
+advertise_base_url = "http://${IP}:${PORT}"
+access_token = "${ACCESS_TOKEN}"
+
+[models]
+default = "remote.${MODEL_ID}"
+
+[models.providers.remote]
+base_url = "https://models.example.test/v1"
+api_key = "sk"
+models = ["${MODEL_ID}", "gpt-static"]
+`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	cfg.Server.ListenAddr = "0.0.0.0:19090"
+	cfg.Server.AdvertiseBaseURL = "http://5.6.7.8:19090"
+	cfg.Server.AccessToken = "changed_access_token"
+	provider := cfg.Models.Providers["remote"]
+	provider.Models = []string{"gpt-changed"}
+	cfg.Models.Providers["remote"] = provider
+	cfg.Models.Default = "remote.gpt-changed"
+
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	saved := string(data)
+	for _, want := range []string{
+		`listen_addr = "0.0.0.0:19090"`,
+		`advertise_base_url = "http://5.6.7.8:19090"`,
+		`access_token = "changed_access_token"`,
+		`default = "remote.gpt-changed"`,
+		`models = ["gpt-changed"]`,
+	} {
+		if !strings.Contains(saved, want) {
+			t.Fatalf("saved config missing %q:\n%s", want, saved)
+		}
+	}
+	for _, stale := range []string{
+		`${PORT}`,
+		`${IP}`,
+		`${ACCESS_TOKEN}`,
+		`${MODEL_ID}`,
+	} {
+		if strings.Contains(saved, stale) {
+			t.Fatalf("saved config kept stale placeholder %q:\n%s", stale, saved)
+		}
+	}
+}
+
 func TestLLMConfigMissingFields(t *testing.T) {
 	missing := (ModelConfig{}).MissingFields()
 	got := strings.Join(missing, ",")

@@ -12,6 +12,15 @@ English | [中文](config.zh.md)
 
 Use `advertise_base_url` when the automatically inferred address is not reachable from BoxLite boxes, such as when you need a LAN address, a tunnel URL, or a host alias.
 
+String values in `config.toml` can reference environment variables with `${NAME}` or `$NAME`. CSGClaw expands them when loading the config and keeps the placeholder form when it later rewrites the same value. If an environment variable is not set, it expands to an empty string.
+
+```toml
+[server]
+listen_addr = "0.0.0.0:${PORT}"
+advertise_base_url = "http://${IP}:${PORT}"
+access_token = "${ACCESS_TOKEN}"
+```
+
 ## Model Provider Examples
 
 ### Local CSGHub-lite

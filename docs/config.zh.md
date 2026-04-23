@@ -12,6 +12,15 @@
 
 当自动推断出的地址无法从 BoxLite box 内访问时，可以设置 `advertise_base_url`，例如使用局域网地址、隧道地址或 host alias。
 
+`config.toml` 中的字符串值可以通过 `${NAME}` 或 `$NAME` 引用环境变量。CSGClaw 读取配置时会展开这些变量；后续重写同一个值时，会尽量保留占位符形式。如果环境变量未设置，会展开为空字符串。
+
+```toml
+[server]
+listen_addr = "0.0.0.0:${PORT}"
+advertise_base_url = "http://${IP}:${PORT}"
+access_token = "${ACCESS_TOKEN}"
+```
+
 ## Model Provider 配置示例
 
 ### 本地 CSGHub-lite
