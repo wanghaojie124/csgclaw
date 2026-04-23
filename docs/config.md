@@ -52,6 +52,7 @@ manager_image = "ghcr.io/russellluo/picoclaw:2026.4.18"
 provider = "boxlite-sdk"
 home_dir_name = "boxlite"
 boxlite_cli_path = "boxlite"
+debian_registries = ["harbor.opencsg.com", "docker.io"]
 ```
 
 ### Remote LLM API
@@ -78,6 +79,7 @@ manager_image = "ghcr.io/russellluo/picoclaw:2026.4.18"
 provider = "boxlite-sdk"
 home_dir_name = "boxlite"
 boxlite_cli_path = "boxlite"
+debian_registries = ["harbor.opencsg.com", "docker.io"]
 ```
 
 ### Local Codex via CLIProxyAPI
@@ -104,6 +106,7 @@ manager_image = "ghcr.io/russellluo/picoclaw:2026.4.18"
 provider = "boxlite-sdk"
 home_dir_name = "boxlite"
 boxlite_cli_path = "boxlite"
+debian_registries = ["harbor.opencsg.com", "docker.io"]
 ```
 
 ## Sandbox Providers
@@ -117,9 +120,16 @@ You can opt in to the CLI-backed provider when you already have the `boxlite` bi
 provider = "boxlite-cli"
 home_dir_name = "boxlite"
 boxlite_cli_path = "boxlite"
+debian_registries = ["harbor.opencsg.com", "docker.io"]
 ```
 
 `boxlite_cli_path` is the executable path used only by `provider = "boxlite-cli"`. The default value, `boxlite`, resolves from `PATH`; set an absolute path if the binary is installed elsewhere.
+
+`debian_registries` controls where BoxLite pulls `debian:bookworm-slim`. Use `onboard` to persist it:
+
+```bash
+csgclaw onboard --debian-registries "harbor.opencsg.com,docker.io"
+```
 
 CSGClaw passes an explicit `--home` to the BoxLite CLI for each agent, using the agent directory plus `home_dir_name` such as `~/.csgclaw/agents/<agent-id>/boxlite`. That explicit home takes precedence over `BOXLITE_HOME` for CSGClaw-managed sandboxes, while `BOXLITE_HOME` still applies when you run `boxlite` manually without `--home`.
 

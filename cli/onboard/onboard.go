@@ -58,6 +58,7 @@ func (c cmd) Run(ctx context.Context, run *command.Context, args []string, globa
 	modelsValue := fs.String("models", "", "comma-separated LLM model identifiers")
 	reasoningEffort := fs.String("reasoning-effort", "", "optional upstream reasoning_effort default")
 	managerImage := fs.String("manager-image", "", "bootstrap manager image")
+	debianRegistries := fs.String("debian-registries", "", "comma-separated OCI registries used for debian:bookworm-slim pulls (persisted to config)")
 	forceRecreateManager := fs.Bool("force-recreate-manager", false, "remove and recreate the bootstrap manager box")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -109,6 +110,9 @@ func (c cmd) Run(ctx context.Context, run *command.Context, args []string, globa
 	syncConfigWithLLM(&cfg, llmCfg)
 	if *managerImage != "" {
 		cfg.Bootstrap.ManagerImage = *managerImage
+	}
+	if strings.TrimSpace(*debianRegistries) != "" {
+		cfg.Sandbox.DebianRegistries = parseRegistriesFlag(*debianRegistries)
 	}
 	if err := validateModelConfig(cfg); err != nil {
 		return err
@@ -684,4 +688,22 @@ func parseModelsFlag(raw string) ([]string, error) {
 		return nil, fmt.Errorf("--models must include at least one model identifier")
 	}
 	return models, nil
+}
+
+func parseRegistriesFlag(raw string) []string {
+	values := strings.Split(raw, ",")
+	out := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
 }

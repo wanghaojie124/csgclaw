@@ -501,10 +501,15 @@ manager_image = %q
 provider = %q
 home_dir_name = %q
 boxlite_cli_path = %q
+`, cfg.Server.ListenAddr, cfg.Server.AdvertiseBaseURL, partiallyMaskSecret(cfg.Server.AccessToken), cfg.Server.NoAuth, cfg.Bootstrap.ManagerImage, cfg.Sandbox.Resolved().Provider, cfg.Sandbox.Resolved().HomeDirName, cfg.Sandbox.Resolved().BoxLiteCLIPath)
+	if len(cfg.Sandbox.Resolved().DebianRegistries) > 0 {
+		content = strings.Replace(content, "[sandbox]\n", fmt.Sprintf("[sandbox]\ndebian_registries = %s\n", formatModelList(cfg.Sandbox.Resolved().DebianRegistries)), 1)
+	}
+	content += fmt.Sprintf(`
 
 [models]
 default = %q
-`, cfg.Server.ListenAddr, cfg.Server.AdvertiseBaseURL, partiallyMaskSecret(cfg.Server.AccessToken), cfg.Server.NoAuth, cfg.Bootstrap.ManagerImage, cfg.Sandbox.Resolved().Provider, cfg.Sandbox.Resolved().HomeDirName, cfg.Sandbox.Resolved().BoxLiteCLIPath, llmCfg.DefaultSelector()) + formatEffectiveProviders(llmCfg)
+`, llmCfg.DefaultSelector()) + formatEffectiveProviders(llmCfg)
 
 	if strings.TrimSpace(cfg.Channels.FeishuAdminOpenID) != "" {
 		content += fmt.Sprintf(`
@@ -699,3 +704,4 @@ func formatModelList(models []string) string {
 	}
 	return "[" + strings.Join(quoted, ", ") + "]"
 }
+

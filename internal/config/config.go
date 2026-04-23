@@ -53,9 +53,10 @@ type BootstrapConfig struct {
 }
 
 type SandboxConfig struct {
-	Provider       string
-	HomeDirName    string
-	BoxLiteCLIPath string
+	Provider         string
+	HomeDirName      string
+	BoxLiteCLIPath   string
+	DebianRegistries []string
 }
 
 func (c SandboxConfig) Resolved() SandboxConfig {
@@ -293,6 +294,12 @@ func Load(path string) (Config, error) {
 			case "boxlite_cli_path":
 				cfg.raw.sandbox.BoxLiteCLIPath = parseRawStringValue(rawValue)
 				cfg.Sandbox.BoxLiteCLIPath = value
+			case "debian_registries":
+				registries, parseErr := parseStringArray(rawValue)
+				if parseErr != nil {
+					return Config{}, fmt.Errorf("parse sandbox.debian_registries: %w", parseErr)
+				}
+				cfg.Sandbox.DebianRegistries = registries
 			}
 		case section == "channels.feishu":
 			switch key {
@@ -360,6 +367,7 @@ func Load(path string) (Config, error) {
 	if cfg.Server.AccessToken == "" {
 		cfg.Server.AccessToken = DefaultAccessToken
 	}
+	cfg.Sandbox.DebianRegistries = normalizeStringList(cfg.Sandbox.DebianRegistries)
 	cfg.Sandbox = cfg.Sandbox.Resolved()
 
 	if !modelsCfg.IsZero() {
@@ -396,15 +404,21 @@ no_auth = %t
 
 [bootstrap]
 manager_image = %q
+`, cfg.rawOrResolvedString(cfg.raw.server.ListenAddr, loadedRaw.server.ListenAddr, cfg.Server.ListenAddr), cfg.rawOrResolvedString(cfg.raw.server.AdvertiseBaseURL, loadedRaw.server.AdvertiseBaseURL, cfg.Server.AdvertiseBaseURL), cfg.rawOrResolvedString(cfg.raw.server.AccessToken, loadedRaw.server.AccessToken, cfg.Server.AccessToken), cfg.Server.NoAuth, cfg.rawOrResolvedString(cfg.raw.bootstrap.ManagerImage, loadedRaw.bootstrap.ManagerImage, cfg.Bootstrap.ManagerImage))
+	sandboxSection := fmt.Sprintf(`
 
 [sandbox]
 provider = %q
 home_dir_name = %q
 boxlite_cli_path = %q
-
-[models]
+`, cfg.rawOrResolvedString(cfg.raw.sandbox.Provider, loadedRaw.sandbox.Provider, resolvedSandbox.Provider), cfg.rawOrResolvedString(cfg.raw.sandbox.HomeDirName, loadedRaw.sandbox.HomeDirName, resolvedSandbox.HomeDirName), cfg.rawOrResolvedString(cfg.raw.sandbox.BoxLiteCLIPath, loadedRaw.sandbox.BoxLiteCLIPath, resolvedSandbox.BoxLiteCLIPath))
+	if len(resolvedSandbox.DebianRegistries) > 0 {
+		sandboxSection = strings.Replace(sandboxSection, "[sandbox]\n", fmt.Sprintf("[sandbox]\ndebian_registries = %s\n", formatStringArray(resolvedSandbox.DebianRegistries)), 1)
+	}
+	b.WriteString(sandboxSection)
+	fmt.Fprintf(&b, `[models]
 default = %q
-`, cfg.rawOrResolvedString(cfg.raw.server.ListenAddr, loadedRaw.server.ListenAddr, cfg.Server.ListenAddr), cfg.rawOrResolvedString(cfg.raw.server.AdvertiseBaseURL, loadedRaw.server.AdvertiseBaseURL, cfg.Server.AdvertiseBaseURL), cfg.rawOrResolvedString(cfg.raw.server.AccessToken, loadedRaw.server.AccessToken, cfg.Server.AccessToken), cfg.Server.NoAuth, cfg.rawOrResolvedString(cfg.raw.bootstrap.ManagerImage, loadedRaw.bootstrap.ManagerImage, cfg.Bootstrap.ManagerImage), cfg.rawOrResolvedString(cfg.raw.sandbox.Provider, loadedRaw.sandbox.Provider, resolvedSandbox.Provider), cfg.rawOrResolvedString(cfg.raw.sandbox.HomeDirName, loadedRaw.sandbox.HomeDirName, resolvedSandbox.HomeDirName), cfg.rawOrResolvedString(cfg.raw.sandbox.BoxLiteCLIPath, loadedRaw.sandbox.BoxLiteCLIPath, resolvedSandbox.BoxLiteCLIPath), cfg.rawOrResolvedString(cfg.raw.modelsDefault, loadedRaw.modelsDefault, defaultSelector))
+`, cfg.rawOrResolvedString(cfg.raw.modelsDefault, loadedRaw.modelsDefault, defaultSelector))
 
 	for _, name := range sortedProviderNames(llmCfg.Providers) {
 		provider := llmCfg.Providers[name].Resolved()
@@ -616,6 +630,29 @@ func sortedProviderNames(providers map[string]ProviderConfig) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func normalizeStringList(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func expandEnv(value string) string {

@@ -105,6 +105,7 @@ listen_addr = "127.0.0.1:18080"
 provider = "boxlite-cli"
 home_dir_name = "sandbox-home"
 boxlite_cli_path = "/usr/local/bin/boxlite"
+debian_registries = ["registry.a", " docker.io ", "registry.a"]
 
 [models]
 default = "default.minimax-m2.7"
@@ -130,6 +131,9 @@ models = ["minimax-m2.7"]
 	}
 	if got, want := cfg.Sandbox.BoxLiteCLIPath, "/usr/local/bin/boxlite"; got != want {
 		t.Fatalf("cfg.Sandbox.BoxLiteCLIPath = %q, want %q", got, want)
+	}
+	if got, want := strings.Join(cfg.Sandbox.DebianRegistries, ","), "registry.a,docker.io"; got != want {
+		t.Fatalf("cfg.Sandbox.DebianRegistries = %q, want %q", got, want)
 	}
 }
 
@@ -309,13 +313,14 @@ func TestSaveWritesModelsSection(t *testing.T) {
 		},
 		Models: models,
 		LLM:    models,
+		Sandbox: SandboxConfig{
+			Provider:          BoxLiteCLIProvider,
+			HomeDirName:       "sandbox-home",
+			BoxLiteCLIPath:    "/opt/boxlite/bin/boxlite",
+			DebianRegistries: []string{"registry.a", "docker.io"},
+		},
 		Bootstrap: BootstrapConfig{
 			ManagerImage: "img",
-		},
-		Sandbox: SandboxConfig{
-			Provider:       BoxLiteCLIProvider,
-			HomeDirName:    "sandbox-home",
-			BoxLiteCLIPath: "/opt/boxlite/bin/boxlite",
 		},
 		Channels: ChannelsConfig{
 			FeishuAdminOpenID: "ou_admin",
@@ -352,6 +357,9 @@ func TestSaveWritesModelsSection(t *testing.T) {
 	}
 	if !strings.Contains(content, "[sandbox]") || !strings.Contains(content, `provider = "boxlite-cli"`) || !strings.Contains(content, `home_dir_name = "sandbox-home"`) || !strings.Contains(content, `boxlite_cli_path = "/opt/boxlite/bin/boxlite"`) {
 		t.Fatalf("saved config missing sandbox section:\n%s", content)
+	}
+	if !strings.Contains(content, `debian_registries = ["registry.a", "docker.io"]`) {
+		t.Fatalf("saved config missing sandbox debian_registries:\n%s", content)
 	}
 	if !strings.Contains(content, `default = "default.minimax-m2.7"`) {
 		t.Fatalf("saved config missing canonical models.default:\n%s", content)
