@@ -599,8 +599,8 @@ func newAgentService(cfg config.Config) (*agent.Service, error) {
 	return agent.NewServiceWithLLMAndChannels(effectiveLLMConfig(cfg), cfg.Server, cfg.Channels, cfg.Bootstrap.ManagerImage, agentsPath, opts...)
 }
 
-func sandboxServiceOptions(sandboxCfg config.SandboxConfig, bootstrapCfg config.BootstrapConfig) ([]agent.ServiceOption, error) {
-	return sandboxproviders.ServiceOptions(sandboxCfg, bootstrapCfg)
+func sandboxServiceOptions(cfg config.SandboxConfig) ([]agent.ServiceOption, error) {
+	return sandboxproviders.ServiceOptions(cfg)
 }
 
 func newIMService() (*im.Service, error) {
