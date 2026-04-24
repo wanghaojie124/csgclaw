@@ -114,7 +114,7 @@ const (
 
 	DefaultHTTPPort           = apiclient.DefaultHTTPPort
 	DefaultAccessToken        = "your_access_token"
-	DefaultManagerImage       = "ghcr.io/russellluo/picoclaw:2026.4.18"
+	DefaultManagerImage       = "ghcr.io/russellluo/picoclaw:2026.4.24.0"
 	CSGHubProvider            = "csghub"
 	BoxLiteSDKProvider        = "boxlite-sdk"
 	BoxLiteCLIProvider        = "boxlite-cli"
