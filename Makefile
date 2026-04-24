@@ -20,9 +20,9 @@ TARGET_ARCH ?= $(shell $(GO) env GOARCH)
 ONBOARD_BASE_URL ?= http://127.0.0.1:4000
 ONBOARD_API_KEY ?= sk-1234567890
 ONBOARD_MODEL_ID ?= minimax-m2.7
-ONBOARD_MANAGER_IMAGE ?= ghcr.io/russellluo/picoclaw:2026.4.24.0
+ONBOARD_MANAGER_IMAGE ?= opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/picoclaw:2026.4.24.0
 
-IMAGE ?= ghcr.io/russellluo/picoclaw
+IMAGE ?= opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/picoclaw
 TAG ?= 2026.4.24.0
 LOCAL_IMAGE ?= picoclaw:local
 
