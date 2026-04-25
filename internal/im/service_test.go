@@ -27,6 +27,9 @@ func TestEnsureWorkerUserCreatesUserAndBootstrapRoom(t *testing.T) {
 	if room == nil {
 		t.Fatal("EnsureWorkerUser() room = nil, want bootstrap room")
 	}
+	if !room.IsDirect {
+		t.Fatalf("EnsureWorkerUser() room.IsDirect = %v, want true", room.IsDirect)
+	}
 	if len(room.Members) != 2 || !containsUserIDInRoom(*room, "u-admin") || !containsUserIDInRoom(*room, "u-alice") {
 		t.Fatalf("EnsureWorkerUser() room members = %+v, want admin and worker", room.Members)
 	}
@@ -133,6 +136,9 @@ func TestCreateRoomStoresStructuredEvent(t *testing.T) {
 	}
 	if len(room.Messages) != 1 {
 		t.Fatalf("CreateRoom() messages = %d, want 1", len(room.Messages))
+	}
+	if room.IsDirect {
+		t.Fatalf("CreateRoom() room.IsDirect = %v, want false", room.IsDirect)
 	}
 	got := room.Messages[0]
 	if got.Kind != MessageKindEvent || got.Event == nil || got.Event.Key != "room_created" || got.Event.ActorID != "u-admin" || got.Event.Title != "Ops" {
@@ -288,6 +294,7 @@ func TestDeleteUserRemovesUserFromStateConversationsAndMessages(t *testing.T) {
 			{
 				ID:       "room-dm",
 				Title:    "Alice",
+				IsDirect: true,
 				Members:  []string{"u-admin", "u-alice"},
 				Messages: []Message{{ID: "msg-3", SenderID: "u-alice", Content: "ping"}},
 			},
@@ -314,6 +321,60 @@ func TestDeleteUserRemovesUserFromStateConversationsAndMessages(t *testing.T) {
 
 	if _, ok := svc.Room("room-dm"); ok {
 		t.Fatal("Room(room-dm) ok = true, want DM deleted after user delete")
+	}
+}
+
+func TestPresentRoomKeepsTwoMemberGroupTitle(t *testing.T) {
+	svc := NewServiceFromBootstrap(Bootstrap{
+		CurrentUserID: "u-admin",
+		Users: []User{
+			{ID: "u-admin", Name: "admin", Handle: "admin"},
+			{ID: "u-alice", Name: "alice", Handle: "alice"},
+		},
+		Rooms: []Room{
+			{
+				ID:       "room-1",
+				Title:    "incident-war-room",
+				IsDirect: false,
+				Members:  []string{"u-admin", "u-alice"},
+			},
+		},
+	})
+
+	room, ok := svc.Room("room-1")
+	if !ok {
+		t.Fatal("Room(room-1) ok = false, want true")
+	}
+	if room.Title != "incident-war-room" {
+		t.Fatalf("Room(room-1).Title = %q, want incident-war-room", room.Title)
+	}
+}
+
+func TestAddRoomMembersRejectsDirectRoom(t *testing.T) {
+	svc := NewServiceFromBootstrap(Bootstrap{
+		CurrentUserID: "u-admin",
+		Users: []User{
+			{ID: "u-admin", Name: "admin", Handle: "admin"},
+			{ID: "u-alice", Name: "alice", Handle: "alice"},
+			{ID: "u-bob", Name: "bob", Handle: "bob"},
+		},
+		Rooms: []Room{
+			{
+				ID:       "room-1",
+				Title:    "alice",
+				IsDirect: true,
+				Members:  []string{"u-admin", "u-alice"},
+			},
+		},
+	})
+
+	_, err := svc.AddRoomMembers(AddRoomMembersRequest{
+		RoomID:    "room-1",
+		InviterID: "u-admin",
+		UserIDs:   []string{"u-bob"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "cannot add members to direct room") {
+		t.Fatalf("AddRoomMembers() error = %v, want direct room error", err)
 	}
 }
 
@@ -501,5 +562,59 @@ func TestLoadBootstrapRejectsLegacyInlineMessages(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "decode im bootstrap") {
 		t.Fatalf("LoadBootstrap() error = %v, want decode im bootstrap error", err)
+	}
+}
+
+func TestEnsureBootstrapStateCreatesAdminManagerDMWhenOnlyGroupExists(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+
+	state := Bootstrap{
+		CurrentUserID: "u-admin",
+		Users: []User{
+			{ID: "u-admin", Name: "admin", Handle: "admin"},
+			{ID: "u-manager", Name: "manager", Handle: "manager"},
+			{ID: "u-alice", Name: "alice", Handle: "alice"},
+		},
+		Rooms: []Room{
+			{
+				ID:          "room-group",
+				Title:       "ops",
+				IsDirect:    false,
+				Description: "group room",
+				Members:     []string{"u-admin", "u-manager", "u-alice"},
+			},
+		},
+	}
+	if err := SaveBootstrap(statePath, state); err != nil {
+		t.Fatalf("SaveBootstrap() error = %v", err)
+	}
+
+	if err := EnsureBootstrapState(statePath); err != nil {
+		t.Fatalf("EnsureBootstrapState() error = %v", err)
+	}
+
+	loaded, err := LoadBootstrap(statePath)
+	if err != nil {
+		t.Fatalf("LoadBootstrap() error = %v", err)
+	}
+
+	if len(loaded.Rooms) != 2 {
+		t.Fatalf("len(Rooms) = %d, want 2", len(loaded.Rooms))
+	}
+
+	var dm *Room
+	for i := range loaded.Rooms {
+		room := &loaded.Rooms[i]
+		if room.IsDirect && len(room.Members) == 2 && containsUserIDInRoom(*room, "u-admin") && containsUserIDInRoom(*room, "u-manager") {
+			dm = room
+			break
+		}
+	}
+	if dm == nil {
+		t.Fatalf("Rooms = %+v, want admin-manager DM created in addition to existing group", loaded.Rooms)
+	}
+	if dm.Title != "admin & manager" {
+		t.Fatalf("dm.Title = %q, want admin & manager", dm.Title)
 	}
 }

@@ -257,9 +257,9 @@ func displayBotField(value string) string {
 
 func RenderRoomsTable(w io.Writer, rooms []apitypes.Room) error {
 	tw := NewTableWriter(w)
-	fmt.Fprintln(tw, "ID\tTITLE\tMEMBERS\tMESSAGES")
+	fmt.Fprintln(tw, "ID\tTITLE\tDIRECT\tMEMBERS\tMESSAGES")
 	for _, room := range rooms {
-		fmt.Fprintf(tw, "%s\t%s\t%d\t%d\n", room.ID, room.Title, len(room.Members), len(room.Messages))
+		fmt.Fprintf(tw, "%s\t%s\t%t\t%d\t%d\n", room.ID, room.Title, room.IsDirect, len(room.Members), len(room.Messages))
 	}
 	return tw.Flush()
 }

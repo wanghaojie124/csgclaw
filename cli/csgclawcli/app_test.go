@@ -263,7 +263,7 @@ func TestExecuteRoomCreateUsesChannelRoute(t *testing.T) {
 			if payload["title"] != "alpha" || payload["creator_id"] != "ou_admin" {
 				t.Fatalf("payload = %#v, want title and creator", payload)
 			}
-			return jsonResponse(http.StatusCreated, `{"id":"oc_alpha","title":"alpha","members":["ou_admin"],"messages":[]}`), nil
+			return jsonResponse(http.StatusCreated, `{"id":"oc_alpha","title":"alpha","is_direct":false,"members":["ou_admin"],"messages":[]}`), nil
 		}),
 	}
 
@@ -271,7 +271,34 @@ func TestExecuteRoomCreateUsesChannelRoute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	assertTableHasRow(t, stdout.String(), "oc_alpha", "alpha", "1", "0")
+	assertTableHasRow(t, stdout.String(), "oc_alpha", "alpha", "false", "1", "0")
+}
+
+func TestExecuteRoomListRendersDirectColumn(t *testing.T) {
+	var stdout bytes.Buffer
+	app := &App{
+		stdout: &stdout,
+		stderr: &bytes.Buffer{},
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodGet {
+				t.Fatalf("method = %q, want %q", req.Method, http.MethodGet)
+			}
+			if req.URL.String() != "http://example.test/api/v1/channels/feishu/rooms" {
+				t.Fatalf("url = %q, want feishu room list route", req.URL.String())
+			}
+			return jsonResponse(http.StatusOK, `[{"id":"oc_dm","title":"alice","is_direct":true,"members":["ou_admin","ou_alice"],"messages":[]},{"id":"oc_group","title":"ops","is_direct":false,"members":["ou_admin","ou_alice","ou_bob"],"messages":[]}]`), nil
+		}),
+	}
+
+	err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "room", "list", "--channel", "feishu"})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(stdout.String(), "DIRECT") {
+		t.Fatalf("stdout = %q, want DIRECT column", stdout.String())
+	}
+	assertTableHasRow(t, stdout.String(), "oc_dm", "alice", "true", "2", "0")
+	assertTableHasRow(t, stdout.String(), "oc_group", "ops", "false", "3", "0")
 }
 
 func TestExecuteRoomDeleteUsesChannelRoute(t *testing.T) {

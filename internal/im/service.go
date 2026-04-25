@@ -93,6 +93,7 @@ type persistedRoom struct {
 	Title       string   `json:"title"`
 	Subtitle    string   `json:"subtitle"`
 	Description string   `json:"description,omitempty"`
+	IsDirect    bool     `json:"is_direct,omitempty"`
 	Members     []string `json:"members"`
 	Messages    string   `json:"messages"`
 }
@@ -252,6 +253,7 @@ func loadPersistedRooms(statePath string, rooms []persistedRoom) ([]Room, error)
 			Title:       room.Title,
 			Subtitle:    room.Subtitle,
 			Description: room.Description,
+			IsDirect:    room.IsDirect,
 			Members:     append([]string(nil), room.Members...),
 			Messages:    messages,
 		})
@@ -334,6 +336,7 @@ func savePersistedRooms(statePath string, rooms []Room) ([]persistedRoom, error)
 			Title:       room.Title,
 			Subtitle:    room.Subtitle,
 			Description: room.Description,
+			IsDirect:    room.IsDirect,
 			Members:     append([]string(nil), room.Members...),
 			Messages:    relativePath,
 		})
@@ -514,7 +517,7 @@ func cloneRooms(rooms []Room) []Room {
 
 func ensureAdminManagerRoom(rooms []Room) []Room {
 	for _, room := range rooms {
-		if containsUserIDInRoom(room, "u-admin") && containsUserIDInRoom(room, "u-manager") {
+		if room.IsDirect && len(room.Members) == 2 && containsUserIDInRoom(room, "u-admin") && containsUserIDInRoom(room, "u-manager") {
 			normalized := room
 			if normalized.Title == "Admin & Manager" {
 				normalized.Title = "admin & manager"
@@ -525,6 +528,7 @@ func ensureAdminManagerRoom(rooms []Room) []Room {
 			if len(normalized.Messages) > 0 && normalized.Messages[0].Content == "Bootstrap room created for Admin and Manager." {
 				normalized.Messages[0].Content = "Bootstrap room created for admin and manager."
 			}
+			normalized.IsDirect = true
 			updated := append([]Room(nil), rooms...)
 			for i := range updated {
 				if updated[i].ID == normalized.ID {
@@ -542,6 +546,7 @@ func ensureAdminManagerRoom(rooms []Room) []Room {
 		Title:       "admin & manager",
 		Subtitle:    formatConversationSubtitle(2),
 		Description: "Bootstrap room for admin and manager.",
+		IsDirect:    true,
 		Members:     []string{"u-admin", "u-manager"},
 		Messages: []Message{
 			{
@@ -898,6 +903,7 @@ func (s *Service) CreateRoom(req CreateRoomRequest) (Room, error) {
 		Title:       title,
 		Subtitle:    formatRoomSubtitle(len(members)),
 		Description: description,
+		IsDirect:    false,
 		Members:     members,
 		Messages: []Message{
 			{
@@ -949,6 +955,9 @@ func (s *Service) AddRoomMembers(req AddRoomMembersRequest) (Room, error) {
 	}
 	if !slices.Contains(room.Members, req.InviterID) {
 		return Room{}, fmt.Errorf("inviter is not a room member")
+	}
+	if room.IsDirect {
+		return Room{}, fmt.Errorf("cannot add members to direct room")
 	}
 
 	existing := make(map[string]struct{}, len(room.Members))
@@ -1147,7 +1156,7 @@ func formatConversationSubtitle(count int) string {
 
 func (s *Service) presentRoomLocked(room Room) Room {
 	cloned := cloneRoom(room)
-	if len(cloned.Members) != 2 {
+	if !cloned.IsDirect || len(cloned.Members) != 2 {
 		return cloned
 	}
 
@@ -1261,6 +1270,7 @@ func (s *Service) ensureAdminAgentRoomLocked(agentID, agentName string) (*Room, 
 		Title:       agentName,
 		Subtitle:    formatRoomSubtitle(2),
 		Description: fmt.Sprintf("Bootstrap room for admin and %s.", agentName),
+		IsDirect:    true,
 		Members:     []string{"u-admin", agentID},
 		Messages: []Message{
 			{
