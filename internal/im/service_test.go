@@ -149,7 +149,7 @@ func TestCreateRoomStoresStructuredEvent(t *testing.T) {
 	}
 }
 
-func TestCreateMessagePrefixesMentionHandle(t *testing.T) {
+func TestCreateMessagePrefixesMentionTag(t *testing.T) {
 	svc := NewServiceFromBootstrap(Bootstrap{
 		CurrentUserID: "u-admin",
 		Users: []User{
@@ -171,8 +171,8 @@ func TestCreateMessagePrefixesMentionHandle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateMessage() error = %v", err)
 	}
-	if message.Content != "@dev hi" {
-		t.Fatalf("CreateMessage() content = %q, want @dev hi", message.Content)
+	if message.Content != `<at user_id="u-dev">dev</at> hi` {
+		t.Fatalf(`CreateMessage() content = %q, want <at user_id="u-dev">dev</at> hi`, message.Content)
 	}
 	if len(message.Mentions) != 1 || message.Mentions[0] != "u-dev" {
 		t.Fatalf("CreateMessage() mentions = %+v, want [u-dev]", message.Mentions)

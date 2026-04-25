@@ -447,7 +447,7 @@ func TestExecuteMessageCreateSendsMentionIDToDefaultChannel(t *testing.T) {
 			if payload["room_id"] != "room-1" || payload["sender_id"] != "u-admin" || payload["content"] != "hi" || payload["mention_id"] != "u-dev" {
 				t.Fatalf("payload = %#v, want room/sender/content/mention_id", payload)
 			}
-			return jsonResponse(http.StatusCreated, `{"id":"msg-1","sender_id":"u-admin","kind":"message","content":"@dev hi","created_at":"2026-04-12T09:00:00Z","mentions":["u-dev"]}`), nil
+			return jsonResponse(http.StatusCreated, `{"id":"msg-1","sender_id":"u-admin","kind":"message","content":"<at user_id=\"u-dev\">dev</at> hi","created_at":"2026-04-12T09:00:00Z","mentions":["u-dev"]}`), nil
 		}),
 	}
 
@@ -455,7 +455,7 @@ func TestExecuteMessageCreateSendsMentionIDToDefaultChannel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if !strings.Contains(stdout.String(), "msg-1") || !strings.Contains(stdout.String(), "@dev hi") {
+	if !strings.Contains(stdout.String(), "msg-1") || !strings.Contains(stdout.String(), `<at user_id="u-dev">dev</at> hi`) {
 		t.Fatalf("stdout = %q, want message with mention-prefixed content", stdout.String())
 	}
 }

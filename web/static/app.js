@@ -44,12 +44,13 @@ const messages = {
     conversationLabel: "房间",
     members: "成员",
     mentionBadge: "@ 提及",
-    inviteMembers: "邀请成员",
+    inviteMembers: "添加成员",
     inputPlaceholder: "输入消息，使用 @ 选择成员",
     send: "发送",
     composerTip: "Enter 发送，Shift + Enter 换行。支持多人房间、双人房间和 @ 提及。",
     createRoomTitle: "创建房间",
     createRoomSubtitle: "为一个新主题建立房间，并预先邀请成员。",
+    createRoomFromDM: "创建房间",
     close: "关闭",
     roomName: "标题",
     roomNamePlaceholder: "例如：Launch War Room",
@@ -115,12 +116,13 @@ const messages = {
     conversationLabel: "Room",
     members: "members",
     mentionBadge: "@ mention",
-    inviteMembers: "Invite Members",
+    inviteMembers: "Add Members",
     inputPlaceholder: "Type a message and use @ to mention members",
     send: "Send",
     composerTip: "Press Enter to send and Shift + Enter for a new line. Supports group chats, 1:1 rooms, and @ mentions.",
     createRoomTitle: "New Room",
     createRoomSubtitle: "Create a new room and invite members in advance.",
+    createRoomFromDM: "New Room",
     close: "Close",
     roomName: "Title",
     roomNamePlaceholder: "For example: Launch War Room",
@@ -388,8 +390,8 @@ function App() {
   });
   const [data, setData] = useState(null);
   const [activeConversationId, setActiveConversationId] = useState("");
-  const [draft, setDraft] = useState("");
-  const [composerSelectionStart, setComposerSelectionStart] = useState(0);
+  const [draftSegments, setDraftSegments] = useState([]);
+  const [composerMentionState, setComposerMentionState] = useState(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
@@ -397,12 +399,13 @@ function App() {
   const [roomTitle, setRoomTitle] = useState("");
   const [roomDescription, setRoomDescription] = useState("");
   const [roomMemberIDs, setRoomMemberIDs] = useState([]);
+  const [lockedRoomMemberIDs, setLockedRoomMemberIDs] = useState([]);
+  const [createRoomMode, setCreateRoomMode] = useState("default");
   const [inviteUserIDs, setInviteUserIDs] = useState([]);
   const [submitError, setSubmitError] = useState("");
   const [composerError, setComposerError] = useState("");
   const [loadingError, setLoadingError] = useState("");
-  const textareaRef = useRef(null);
-  const composerHighlightRef = useRef(null);
+  const editorRef = useRef(null);
   const messageListRef = useRef(null);
 
   useEffect(() => {
@@ -473,31 +476,30 @@ function App() {
   );
   const roomCount = rooms.length;
 
-  const mentionState = useMemo(() => getMentionState(draft, composerSelectionStart), [draft, composerSelectionStart]);
   const mentionCandidates = useMemo(() => {
-    if (!data || !mentionState) {
+    if (!data || !composerMentionState) {
       return [];
     }
     const allowed = new Set(activeConversation?.members ?? []);
     return data.users
       .filter((user) => allowed.has(user.id))
-      .filter((user) => user.handle.toLowerCase().includes(mentionState.query.toLowerCase()) || user.name.toLowerCase().includes(mentionState.query.toLowerCase()))
+      .filter((user) => user.handle.toLowerCase().includes(composerMentionState.query.toLowerCase()) || user.name.toLowerCase().includes(composerMentionState.query.toLowerCase()))
       .slice(0, 5);
-  }, [data, activeConversation, mentionState]);
+  }, [data, activeConversation, composerMentionState]);
+
+  const draftText = useMemo(() => segmentsToPlainText(draftSegments), [draftSegments]);
 
   useEffect(() => {
     setMentionIndex(0);
-  }, [activeConversationId, draft]);
-
-  useEffect(() => {
-    setComposerSelectionStart(0);
-  }, [activeConversationId]);
+  }, [activeConversationId, composerMentionState?.query, draftText]);
 
   useEffect(() => {
     if (!showCreateRoom) {
       setRoomTitle("");
       setRoomDescription("");
       setRoomMemberIDs([]);
+      setLockedRoomMemberIDs([]);
+      setCreateRoomMode("default");
       setSubmitError("");
     }
   }, [showCreateRoom]);
@@ -529,16 +531,6 @@ function App() {
   }, [data, activeConversationId]);
 
   useEffect(() => {
-    const el = textareaRef.current;
-    if (!el) {
-      return;
-    }
-    el.style.height = "0px";
-    el.style.height = `${Math.min(el.scrollHeight, 168)}px`;
-    syncComposerScroll(el);
-  }, [draft]);
-
-  useEffect(() => {
     const el = messageListRef.current;
     if (!el) {
       return;
@@ -547,7 +539,7 @@ function App() {
   }, [activeConversationId, visibleMessages.length]);
 
   async function sendMessage() {
-    if (!data || !activeConversation || !draft.trim()) {
+    if (!data || !activeConversation || !draftText.trim()) {
       return;
     }
 
@@ -558,7 +550,7 @@ function App() {
       body: JSON.stringify({
         room_id: activeConversation.id,
         sender_id: data.current_user_id,
-        content: draft,
+        content: serializeComposerSegments(draftSegments),
       }),
     });
     if (!resp.ok) {
@@ -567,7 +559,7 @@ function App() {
     }
     const created = await resp.json();
     setData((current) => appendMessageToData(current, activeConversation.id, created));
-    setDraft("");
+    clearComposer();
   }
 
   async function createRoom() {
@@ -576,6 +568,7 @@ function App() {
     }
 
     setSubmitError("");
+    const memberIDs = roomMemberIDs.filter((id) => id && id !== data.current_user_id);
     const resp = await fetch("api/v1/rooms", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -583,7 +576,7 @@ function App() {
         title: roomTitle,
         description: roomDescription,
         creator_id: data.current_user_id,
-        member_ids: roomMemberIDs,
+        member_ids: memberIDs,
         locale,
       }),
     });
@@ -597,6 +590,38 @@ function App() {
     setActiveConversationId(created.id);
     setComposerError("");
     setShowCreateRoom(false);
+  }
+
+  function openCreateRoomModal(options = {}) {
+    if (!data) {
+      return;
+    }
+    const lockedIDs = Array.from(new Set((options.lockedMemberIDs ?? [data.current_user_id]).filter(Boolean)));
+    const selectedIDs = Array.from(new Set((options.preselectedMemberIDs ?? lockedIDs).filter(Boolean)));
+    setRoomTitle(options.title ?? "");
+    setRoomDescription(options.description ?? "");
+    setRoomMemberIDs(selectedIDs);
+    setLockedRoomMemberIDs(lockedIDs);
+    setCreateRoomMode(options.mode ?? "default");
+    setSubmitError("");
+    setShowInvite(false);
+    setShowCreateRoom(true);
+  }
+
+  function handleInviteAction() {
+    if (!activeConversation) {
+      return;
+    }
+    if (isDirectConversation(activeConversation)) {
+      openCreateRoomModal({
+        mode: "from-direct",
+        preselectedMemberIDs: activeConversation.members,
+        lockedMemberIDs: activeConversation.members,
+      });
+      return;
+    }
+    setSubmitError("");
+    setShowInvite(true);
   }
 
   async function inviteUsers() {
@@ -649,33 +674,15 @@ function App() {
   }
 
   function applyMention(user) {
-    const state = getMentionState(draft, composerSelectionStart);
+    const editor = editorRef.current;
+    const state = getComposerMentionState(editor);
     if (!state) {
       return;
     }
-    const next = `${draft.slice(0, state.start)}@${user.handle} ${draft.slice(state.end)}`;
-    const pos = state.start + user.handle.length + 2;
-    setDraft(next);
-    setComposerSelectionStart(pos);
-    requestAnimationFrame(() => {
-      const el = textareaRef.current;
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(pos, pos);
-    });
-  }
-
-  function syncComposerSelection(target) {
-    setComposerSelectionStart(target.selectionStart ?? target.value.length);
-  }
-
-  function syncComposerScroll(target) {
-    const highlight = composerHighlightRef.current;
-    if (!highlight || !target) {
+    if (!replaceMentionQueryWithToken(editor, state, user)) {
       return;
     }
-    highlight.scrollTop = target.scrollTop;
-    highlight.scrollLeft = target.scrollLeft;
+    syncComposerFromEditor();
   }
 
   function onComposerKeyDown(event) {
@@ -697,23 +704,64 @@ function App() {
       }
     }
 
+    if (event.key === "Backspace" && removeAdjacentMentionToken(editorRef.current, "backward")) {
+      event.preventDefault();
+      syncComposerFromEditor();
+      return;
+    }
+
+    if (event.key === "Delete" && removeAdjacentMentionToken(editorRef.current, "forward")) {
+      event.preventDefault();
+      syncComposerFromEditor();
+      return;
+    }
+
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       sendMessage();
+      return;
     }
+
+    if (event.key === "Enter" && event.shiftKey) {
+      event.preventDefault();
+      insertComposerLineBreak(editorRef.current);
+      syncComposerFromEditor();
+    }
+  }
+
+  function syncComposerFromEditor() {
+    const editor = editorRef.current;
+    if (!editor) {
+      return;
+    }
+    setDraftSegments(parseComposerSegments(editor));
+    setComposerMentionState(getComposerMentionState(editor));
+  }
+
+  function clearComposer() {
+    const editor = editorRef.current;
+    if (editor) {
+      editor.innerHTML = "";
+      editor.focus();
+    }
+    setDraftSegments([]);
+    setComposerMentionState(null);
   }
 
   if (!data) {
     return html`<div className="empty-state">${loadingError || t("loading")}</div>`;
   }
 
-  const createRoomCandidates = data.users.filter((user) => user.id !== data.current_user_id);
+  const createRoomCandidates = data.users;
   const inviteCandidates = activeConversation
     ? data.users.filter((user) => !activeConversation.members.includes(user.id))
     : [];
   const activeConversationMembers = activeConversation
     ? activeConversation.members.map((id) => usersById.get(id)).filter(Boolean)
     : [];
+  const inviteActionLabel = activeConversation && isDirectConversation(activeConversation)
+    ? t("createRoomFromDM")
+    : t("inviteMembers");
   return html`
     <${React.Fragment}>
       <div className=${`app-shell ${isSidebarCollapsed ? "sidebar-collapsed" : ""}`}>
@@ -759,7 +807,7 @@ function App() {
                   className="sidebar-nav-button"
                   aria-label=${t("createRoom")}
                   title=${t("createRoom")}
-                  onClick=${() => setShowCreateRoom(true)}
+                  onClick=${() => openCreateRoomModal()}
                 >
                   <span className="sidebar-nav-icon" aria-hidden="true"><${RoomPlusIcon} /></span>
                   <span className="sidebar-nav-label">${t("createRoom")}</span>
@@ -810,7 +858,7 @@ function App() {
                     className="sidebar-rail-button"
                     aria-label=${t("createRoom")}
                     title=${t("createRoom")}
-                    onClick=${() => setShowCreateRoom(true)}
+                    onClick=${() => openCreateRoomModal()}
                   >
                     <span className="sidebar-rail-icon" aria-hidden="true"><${RoomPlusIcon} /></span>
                   </button>
@@ -881,9 +929,9 @@ function App() {
                         </button>
                         <button
                           className="icon-button"
-                          aria-label=${t("inviteMembers")}
-                          title=${t("inviteMembers")}
-                          onClick=${() => setShowInvite(true)}
+                          aria-label=${inviteActionLabel}
+                          title=${inviteActionLabel}
+                          onClick=${handleInviteAction}
                         >
                           <span className="icon-button-mark"><${AddUserIcon} /></span>
                         </button>
@@ -911,8 +959,9 @@ function App() {
                     }
                     const user = usersById.get(message.sender_id);
                     const own = message.sender_id === data.current_user_id;
+                    const isAdmin = user?.role === "admin";
                     return html`
-                      <div key=${message.id} className=${`message-row ${own ? "own" : ""}`}>
+                      <div key=${message.id} className=${`message-row ${own ? "own" : ""} ${isAdmin ? "admin" : ""}`.trim()}>
                         <div className="avatar" style=${{ background: `linear-gradient(135deg, ${user.accent_hex}, #10233f)` }}>${user.avatar}</div>
                         <div className="message-card">
                           <div className="message-meta">
@@ -951,30 +1000,28 @@ function App() {
                     : null}
                   <div className="composer-box">
                     <div className="composer-input-wrap">
-                      <div ref=${composerHighlightRef} className="composer-highlight" aria-hidden="true">
-                        ${renderComposerHighlight(draft)}
-                      </div>
-                      <textarea
-                        ref=${textareaRef}
-                        value=${draft}
-                        placeholder=${t("inputPlaceholder")}
-                        onInput=${(event) => {
-                          setDraft(event.target.value);
-                          syncComposerSelection(event.target);
-                          syncComposerScroll(event.target);
-                        }}
-                        onClick=${(event) => syncComposerSelection(event.target)}
+                      <div
+                        ref=${editorRef}
+                        className=${`composer-editor ${draftSegments.length === 0 ? "empty" : ""}`}
+                        contentEditable="true"
+                        suppressContentEditableWarning=${true}
+                        data-placeholder=${t("inputPlaceholder")}
+                        onInput=${syncComposerFromEditor}
+                        onClick=${syncComposerFromEditor}
                         onKeyDown=${onComposerKeyDown}
-                        onKeyUp=${(event) => syncComposerSelection(event.target)}
-                        onScroll=${(event) => syncComposerScroll(event.target)}
-                        onSelect=${(event) => syncComposerSelection(event.target)}
+                        onKeyUp=${syncComposerFromEditor}
+                        onPaste=${(event) => {
+                          event.preventDefault();
+                          insertPlainTextAtSelection(event.clipboardData?.getData("text/plain") ?? "");
+                          syncComposerFromEditor();
+                        }}
                       />
                       <button
                         type="button"
                         className="composer-send-button"
                         aria-label=${t("send")}
                         title=${t("send")}
-                        disabled=${!draft.trim()}
+                        disabled=${!draftText.trim()}
                         onClick=${sendMessage}
                       >
                         <span className="composer-send-main" aria-hidden="true">
@@ -1022,6 +1069,7 @@ function App() {
                         <input
                           type="checkbox"
                           checked=${roomMemberIDs.includes(user.id)}
+                          disabled=${lockedRoomMemberIDs.includes(user.id)}
                           onChange=${() => setRoomMemberIDs((current) => toggleSelection(current, user.id))}
                         />
                         <span>${user.name}</span>
@@ -1181,54 +1229,6 @@ function localizeError(raw, t) {
   return cleaned;
 }
 
-function getMentionState(text, selection) {
-  const cursor = typeof selection === "number"
-    ? selection
-    : selection?.selectionStart ?? text.length;
-  const before = text.slice(0, cursor);
-  const match = before.match(/(^|\s)@([a-zA-Z0-9._-]*)$/);
-  if (!match) return null;
-  return {
-    query: match[2],
-    start: cursor - match[2].length - 1,
-    end: cursor,
-  };
-}
-
-function renderComposerHighlight(text) {
-  if (!text) {
-    return "\u00A0";
-  }
-
-  const parts = [];
-  const mentionPattern = /(^|\s)(@[a-zA-Z0-9._-]+)/g;
-  let cursor = 0;
-  let match = mentionPattern.exec(text);
-
-  while (match) {
-    const prefix = match[1];
-    const mention = match[2];
-    const start = match.index;
-    const mentionStart = start + prefix.length;
-
-    if (cursor < start) {
-      parts.push(text.slice(cursor, start));
-    }
-    if (prefix) {
-      parts.push(prefix);
-    }
-    parts.push(html`<span key=${`${mentionStart}-${mention}`} className="composer-mention">${mention}</span>`);
-    cursor = mentionStart + mention.length;
-    match = mentionPattern.exec(text);
-  }
-
-  if (cursor < text.length) {
-    parts.push(text.slice(cursor));
-  }
-
-  return parts;
-}
-
 function isToolCallMessage(content) {
   return (content ?? "").trimStart().startsWith("🔧 ");
 }
@@ -1245,9 +1245,32 @@ function formatConversationPreview(message, conversation, currentUserID, usersBy
     if (isEventMessage(message)) {
       return formatEventMessage(message, usersById, locale);
     }
-    return message.content;
+    return flattenMentionText(message.content);
   }
   return getConversationSubtitle(conversation, currentUserID, usersById, locale, t);
+}
+
+const mentionMarkupPattern = /<at\s+user_id="([^"]+)">([\s\S]*?)<\/at>/g;
+
+function flattenMentionText(content) {
+  return String(content ?? "").replace(mentionMarkupPattern, (_, __, name) => `@${name}`);
+}
+
+function decorateMentionMarkup(content) {
+  return String(content ?? "").replace(mentionMarkupPattern, (_, userID, name) => {
+    const safeUserID = escapeHTML(userID);
+    const safeName = escapeHTML(name);
+    return `<span class="message-mention" data-user-id="${safeUserID}">@${safeName}</span>`;
+  });
+}
+
+function escapeHTML(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function formatEventMessage(message, usersById, locale) {
@@ -1298,6 +1321,10 @@ function userDisplayName(userID, usersById) {
 function resolveConversationUser(conversation, currentUserID, usersById) {
   const otherID = conversation.members.find((id) => id !== currentUserID) ?? currentUserID;
   return usersById.get(otherID);
+}
+
+function isDirectConversation(conversation) {
+  return Boolean(conversation?.is_direct) || isTwoPersonConversation(conversation);
 }
 
 function isTwoPersonConversation(conversation) {
@@ -1440,11 +1467,289 @@ function toggleSelection(current, id) {
 }
 
 function renderMarkdown(content) {
-  const raw = marked.parse(content ?? "");
+  const raw = marked.parse(decorateMentionMarkup(content));
   return DOMPurify.sanitize(raw, {
     USE_PROFILES: { html: true },
-    ADD_ATTR: ["target", "rel", "class"],
+    ADD_ATTR: ["target", "rel", "class", "data-user-id"],
   });
+}
+
+function createMentionTokenElement(user) {
+  const token = document.createElement("span");
+  token.className = "composer-mention-token";
+  token.dataset.userId = user.id;
+  token.dataset.userName = user.name || user.handle || user.id;
+  token.contentEditable = "false";
+  token.textContent = `@${token.dataset.userName}`;
+  return token;
+}
+
+function parseComposerSegments(root) {
+  if (!root) {
+    return [];
+  }
+  const segments = [];
+  collectComposerSegments(root, segments);
+  return normalizeComposerSegments(segments);
+}
+
+function collectComposerSegments(node, segments) {
+  node.childNodes.forEach((child) => {
+    if (child.nodeType === Node.TEXT_NODE) {
+      segments.push({ type: "text", text: child.textContent ?? "" });
+      return;
+    }
+    if (child.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+    if (child.dataset?.userId) {
+      segments.push({
+        type: "mention",
+        userId: child.dataset.userId,
+        userName: child.dataset.userName || child.textContent?.replace(/^@/, "") || child.dataset.userId,
+      });
+      return;
+    }
+    if (child.tagName === "BR") {
+      segments.push({ type: "text", text: "\n" });
+      return;
+    }
+    collectComposerSegments(child, segments);
+    if (child.tagName === "DIV" || child.tagName === "P") {
+      segments.push({ type: "text", text: "\n" });
+    }
+  });
+}
+
+function normalizeComposerSegments(segments) {
+  const normalized = [];
+  for (const segment of segments) {
+    if (!segment) {
+      continue;
+    }
+    if (segment.type === "mention") {
+      if (!segment.userId) {
+        continue;
+      }
+      normalized.push(segment);
+      continue;
+    }
+    const text = segment.text ?? "";
+    if (!text) {
+      continue;
+    }
+    const previous = normalized[normalized.length - 1];
+    if (previous?.type === "text") {
+      previous.text += text;
+    } else {
+      normalized.push({ type: "text", text });
+    }
+  }
+  while (normalized.at(-1)?.type === "text" && normalized.at(-1).text.endsWith("\n")) {
+    normalized.at(-1).text = normalized.at(-1).text.replace(/\n+$/, "");
+    if (!normalized.at(-1).text) {
+      normalized.pop();
+    }
+  }
+  return normalized;
+}
+
+function segmentsToPlainText(segments) {
+  return (segments ?? []).map((segment) => {
+    if (segment.type === "mention") {
+      return `@${segment.userName || segment.userId}`;
+    }
+    return segment.text ?? "";
+  }).join("");
+}
+
+function serializeComposerSegments(segments) {
+  return (segments ?? []).map((segment) => {
+    if (segment.type === "mention") {
+      const userID = segment.userId || "";
+      const userName = segment.userName || userID;
+      return `<at user_id="${userID}">${userName}</at>`;
+    }
+    return segment.text ?? "";
+  }).join("");
+}
+
+function getComposerMentionState(root) {
+  if (!root) {
+    return null;
+  }
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return null;
+  }
+  const range = selection.getRangeAt(0);
+  if (!root.contains(range.startContainer)) {
+    return null;
+  }
+  const context = getActiveTextQueryContext(range.startContainer, range.startOffset);
+  if (!context) {
+    return null;
+  }
+  const match = context.textBeforeCursor.match(/(^|\s)@([a-zA-Z0-9._-]*)$/);
+  if (!match) {
+    return null;
+  }
+  return {
+    query: match[2],
+    textNode: context.textNode,
+    startOffset: context.offset - match[2].length - 1,
+    endOffset: context.offset,
+  };
+}
+
+function getActiveTextQueryContext(node, offset) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return {
+      textNode: node,
+      offset,
+      textBeforeCursor: (node.textContent ?? "").slice(0, offset),
+    };
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return null;
+  }
+  const child = node.childNodes[offset - 1];
+  if (!child || child.nodeType !== Node.TEXT_NODE) {
+    return null;
+  }
+  return {
+    textNode: child,
+    offset: child.textContent?.length ?? 0,
+    textBeforeCursor: child.textContent ?? "",
+  };
+}
+
+function replaceMentionQueryWithToken(root, mentionState, user) {
+  if (!root || !mentionState?.textNode || !user) {
+    return false;
+  }
+  const range = document.createRange();
+  range.setStart(mentionState.textNode, mentionState.startOffset);
+  range.setEnd(mentionState.textNode, mentionState.endOffset);
+  range.deleteContents();
+
+  const spacer = document.createTextNode(" ");
+  const token = createMentionTokenElement(user);
+  const fragment = document.createDocumentFragment();
+  fragment.append(token, spacer);
+  range.insertNode(fragment);
+
+  const selection = window.getSelection();
+  const afterRange = document.createRange();
+  afterRange.setStart(spacer, spacer.textContent.length);
+  afterRange.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(afterRange);
+  root.focus();
+  return true;
+}
+
+function insertComposerLineBreak(root) {
+  if (!root) {
+    return;
+  }
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  if (!root.contains(range.startContainer)) {
+    return;
+  }
+  range.deleteContents();
+  const br = document.createElement("br");
+  const spacer = document.createTextNode("");
+  range.insertNode(br);
+  br.after(spacer);
+  const nextRange = document.createRange();
+  nextRange.setStart(spacer, 0);
+  nextRange.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(nextRange);
+}
+
+function insertPlainTextAtSelection(text) {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  range.deleteContents();
+  const node = document.createTextNode(text);
+  range.insertNode(node);
+  const nextRange = document.createRange();
+  nextRange.setStart(node, node.textContent.length);
+  nextRange.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(nextRange);
+}
+
+function removeAdjacentMentionToken(root, direction) {
+  if (!root) {
+    return false;
+  }
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) {
+    return false;
+  }
+  const range = selection.getRangeAt(0);
+  if (!root.contains(range.startContainer)) {
+    return false;
+  }
+  const token = findAdjacentMentionToken(range.startContainer, range.startOffset, direction);
+  if (!token) {
+    return false;
+  }
+  const sibling = direction === "backward" ? token.nextSibling : token.previousSibling;
+  token.remove();
+  if (sibling?.nodeType === Node.TEXT_NODE && sibling.textContent === " ") {
+    sibling.remove();
+  }
+  placeCaretNearNode(root, direction === "backward" ? sibling?.previousSibling ?? root : sibling?.nextSibling ?? root, direction);
+  return true;
+}
+
+function findAdjacentMentionToken(node, offset, direction) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    if (direction === "backward" && offset > 0) {
+      return null;
+    }
+    if (direction === "forward" && offset < (node.textContent?.length ?? 0)) {
+      return null;
+    }
+    const sibling = direction === "backward" ? node.previousSibling : node.nextSibling;
+    return sibling?.dataset?.userId ? sibling : null;
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return null;
+  }
+  const index = direction === "backward" ? offset - 1 : offset;
+  const sibling = node.childNodes[index];
+  return sibling?.dataset?.userId ? sibling : null;
+}
+
+function placeCaretNearNode(root, node, direction) {
+  const selection = window.getSelection();
+  const range = document.createRange();
+  if (node?.nodeType === Node.TEXT_NODE) {
+    const offset = direction === "backward" ? node.textContent.length : 0;
+    range.setStart(node, offset);
+  } else if (node?.parentNode) {
+    const parent = node.parentNode;
+    const index = Array.prototype.indexOf.call(parent.childNodes, node);
+    range.setStart(parent, direction === "backward" ? index + 1 : index);
+  } else {
+    range.setStart(root, root.childNodes.length);
+  }
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  root.focus();
 }
 
 function parseStructuredMessage(content) {

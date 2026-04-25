@@ -78,6 +78,7 @@ type Service struct {
 }
 
 var mentionPattern = regexp.MustCompile(`(^|[^\w])@([a-zA-Z0-9._-]+)`)
+var mentionTagPattern = regexp.MustCompile(`<at\s+user_id="([^"]+)">[^<]*</at>`)
 
 const sessionsDirName = "sessions"
 
@@ -1051,14 +1052,26 @@ func (s *Service) User(userID string) (User, bool) {
 }
 
 func (s *Service) extractMentions(content string) []string {
-	matches := mentionPattern.FindAllStringSubmatch(content, -1)
-	if len(matches) == 0 {
+	tagMatches := mentionTagPattern.FindAllStringSubmatch(content, -1)
+	handleMatches := mentionPattern.FindAllStringSubmatch(content, -1)
+	if len(tagMatches) == 0 && len(handleMatches) == 0 {
 		return nil
 	}
 
-	seen := make(map[string]struct{}, len(matches))
-	mentions := make([]string, 0, len(matches))
-	for _, match := range matches {
+	seen := make(map[string]struct{}, len(tagMatches)+len(handleMatches))
+	mentions := make([]string, 0, len(tagMatches)+len(handleMatches))
+	for _, match := range tagMatches {
+		userID := strings.TrimSpace(match[1])
+		if _, ok := s.users[userID]; !ok {
+			continue
+		}
+		if _, exists := seen[userID]; exists {
+			continue
+		}
+		seen[userID] = struct{}{}
+		mentions = append(mentions, userID)
+	}
+	for _, match := range handleMatches {
 		handle := strings.ToLower(match[2])
 		if userID, ok := s.byHandle[handle]; ok {
 			if _, exists := seen[userID]; exists {
@@ -1212,12 +1225,15 @@ func (s *Service) contentWithMentionPrefixLocked(content, mentionID string) (str
 	if !ok {
 		return "", fmt.Errorf("mentioned user not found")
 	}
-	handle := strings.TrimSpace(user.Handle)
-	if handle == "" {
-		return "", fmt.Errorf("mentioned user has no handle")
+	displayName := strings.TrimSpace(user.Name)
+	if displayName == "" {
+		displayName = strings.TrimSpace(user.Handle)
+	}
+	if displayName == "" {
+		displayName = mentionID
 	}
 
-	prefix := "@" + handle
+	prefix := fmt.Sprintf("<at user_id=\"%s\">%s</at>", mentionID, displayName)
 	if content == prefix || strings.HasPrefix(content, prefix+" ") {
 		return content, nil
 	}
