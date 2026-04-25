@@ -10,8 +10,8 @@ import (
 )
 
 type persistedState struct {
-	Agents  []Agent        `json:"agents"`
-	Workers []legacyWorker `json:"workers,omitempty"`
+	Agents  []persistedAgent `json:"agents"`
+	Workers []legacyWorker   `json:"workers,omitempty"`
 }
 
 func (s persistedState) isObject() bool {
@@ -25,6 +25,52 @@ type legacyWorker struct {
 	Status      string    `json:"status"`
 	CreatedAt   time.Time `json:"created_at"`
 	ModelID     string    `json:"model_id,omitempty"`
+}
+
+type persistedAgent struct {
+	ID              string    `json:"id"`
+	Name            string    `json:"name"`
+	Description     string    `json:"description,omitempty"`
+	Image           string    `json:"image,omitempty"`
+	BoxID           string    `json:"box_id,omitempty"`
+	Role            string    `json:"role"`
+	CreatedAt       time.Time `json:"created_at"`
+	Profile         string    `json:"profile,omitempty"`
+	Provider        string    `json:"provider,omitempty"`
+	ModelID         string    `json:"model_id,omitempty"`
+	ReasoningEffort string    `json:"reasoning_effort,omitempty"`
+}
+
+func newPersistedAgent(a Agent) persistedAgent {
+	return persistedAgent{
+		ID:              a.ID,
+		Name:            a.Name,
+		Description:     a.Description,
+		Image:           a.Image,
+		BoxID:           a.BoxID,
+		Role:            a.Role,
+		CreatedAt:       a.CreatedAt,
+		Profile:         a.Profile,
+		Provider:        a.Provider,
+		ModelID:         a.ModelID,
+		ReasoningEffort: a.ReasoningEffort,
+	}
+}
+
+func (a persistedAgent) toAgent() Agent {
+	return Agent{
+		ID:              a.ID,
+		Name:            a.Name,
+		Description:     a.Description,
+		Image:           a.Image,
+		BoxID:           a.BoxID,
+		Role:            a.Role,
+		CreatedAt:       a.CreatedAt,
+		Profile:         a.Profile,
+		Provider:        a.Provider,
+		ModelID:         a.ModelID,
+		ReasoningEffort: a.ReasoningEffort,
+	}
 }
 
 func (w legacyWorker) toAgent() Agent {
@@ -80,7 +126,7 @@ func (s *Service) readState() (map[string]Agent, error) {
 	var state persistedState
 	if err := json.Unmarshal(data, &state); err == nil && state.isObject() {
 		for _, a := range state.Agents {
-			normalized := s.normalizeLoadedAgent(a)
+			normalized := s.normalizeLoadedAgent(a.toAgent())
 			agents[normalized.ID] = normalized
 		}
 		for _, w := range state.Workers {
@@ -107,7 +153,7 @@ func (s *Service) saveLocked() error {
 	}
 
 	data, err := json.MarshalIndent(persistedState{
-		Agents: sortedAgentsFromMap(s.agents),
+		Agents: persistedAgentsFromMap(s.agents),
 	}, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode agent state: %w", err)

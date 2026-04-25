@@ -528,13 +528,12 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (Agent, error) 
 
 func (s *Service) Agent(id string) (Agent, bool) {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	a, ok := s.agents[strings.TrimSpace(id)]
+	s.mu.RUnlock()
 	if !ok {
 		return Agent{}, false
 	}
-	return *cloneAgent(&a), true
+	return s.hydrateAgentStatus(context.Background(), a), true
 }
 
 func (s *Service) resolveAgentBox(ctx context.Context, rt sandbox.Runtime, got Agent) (sandbox.Instance, string, error) {
@@ -807,8 +806,12 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 
 func (s *Service) List() []Agent {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return sortedAgentsFromMap(s.agents)
+	agents := sortedAgentsFromMap(s.agents)
+	s.mu.RUnlock()
+	for idx := range agents {
+		agents[idx] = s.hydrateAgentStatus(context.Background(), agents[idx])
+	}
+	return agents
 }
 
 func (s *Service) CreateWorker(ctx context.Context, req CreateRequest) (Agent, error) {
@@ -956,6 +959,48 @@ func (s *Service) StreamLogs(ctx context.Context, id string, follow bool, lines 
 		return fmt.Errorf("tail exited with code %d", exitCode)
 	}
 	return nil
+}
+
+func (s *Service) hydrateAgentStatus(ctx context.Context, a Agent) Agent {
+	a = *cloneAgent(&a)
+	if strings.TrimSpace(a.Name) == "" {
+		a.Status = string(sandbox.StateUnknown)
+		return a
+	}
+
+	rt, err := s.ensureRuntime(a.Name)
+	if err != nil {
+		a.Status = string(sandbox.StateUnknown)
+		return a
+	}
+	runtimeHome, err := s.sandboxRuntimeHome(a.Name)
+	if err != nil {
+		a.Status = string(sandbox.StateUnknown)
+		return a
+	}
+	defer func() {
+		_ = s.closeRuntime(runtimeHome, rt)
+	}()
+
+	box, _, err := s.resolveAgentBox(ctx, rt, a)
+	if err != nil {
+		a.Status = string(sandbox.StateUnknown)
+		return a
+	}
+	defer func() {
+		_ = s.closeBox(box)
+	}()
+
+	info, err := s.boxInfo(ctx, box)
+	if err != nil {
+		a.Status = string(sandbox.StateUnknown)
+		return a
+	}
+	if strings.TrimSpace(info.ID) != "" {
+		a.BoxID = info.ID
+	}
+	a.Status = string(info.State)
+	return a
 }
 
 func (s *Service) Close() error {

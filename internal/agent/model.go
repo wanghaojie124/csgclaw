@@ -82,6 +82,15 @@ func sortedAgentsFromMap(items map[string]Agent) []Agent {
 	return agents
 }
 
+func persistedAgentsFromMap(items map[string]Agent) []persistedAgent {
+	agents := sortedAgentsFromMap(items)
+	persisted := make([]persistedAgent, 0, len(agents))
+	for _, a := range agents {
+		persisted = append(persisted, newPersistedAgent(a))
+	}
+	return persisted
+}
+
 func cloneAgent(src *Agent) *Agent {
 	if src == nil {
 		return nil

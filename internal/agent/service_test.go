@@ -448,6 +448,36 @@ func TestDeleteRemovesAgentFromState(t *testing.T) {
 	}
 }
 
+func TestSaveLockedOmitsPersistedAgentStatus(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "agents.json")
+
+	svc, err := NewService(config.ModelConfig{}, config.ServerConfig{}, "", statePath)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	svc.agents["u-alice"] = Agent{
+		ID:        "u-alice",
+		Name:      "alice",
+		Role:      RoleWorker,
+		BoxID:     "box-alice",
+		Status:    "running",
+		CreatedAt: time.Date(2026, 4, 1, 11, 0, 0, 0, time.UTC),
+	}
+
+	if err := svc.saveLocked(); err != nil {
+		t.Fatalf("saveLocked() error = %v", err)
+	}
+
+	data, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if strings.Contains(string(data), `"status"`) {
+		t.Fatalf("saved state should not contain status: %s", data)
+	}
+}
+
 func TestDeleteRemovesAgentHomeDirectory(t *testing.T) {
 	SetTestHooks(
 		func(_ *Service, _ string) (sandbox.Runtime, error) { return nil, nil },
@@ -877,8 +907,8 @@ func TestStreamLogsFallsBackToNameAndRefreshesStoredBoxID(t *testing.T) {
 	if err := svc.StreamLogs(context.Background(), "u-alice", false, 20, &out); err != nil {
 		t.Fatalf("StreamLogs() error = %v", err)
 	}
-	if strings.Join(gotKeys, ",") != "box-stale,alice" {
-		t.Fatalf("getBox() keys = %q, want stale box id then name fallback", gotKeys)
+	if len(gotKeys) < 2 || gotKeys[0] != "box-stale" || gotKeys[1] != "alice" {
+		t.Fatalf("getBox() leading keys = %q, want stale box id then name fallback", gotKeys)
 	}
 	got, ok := svc.Agent("u-alice")
 	if !ok {
@@ -935,8 +965,8 @@ func TestStartFallsBackToNameAndRefreshesStoredAgentState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	if strings.Join(gotKeys, ",") != "box-stale,alice" {
-		t.Fatalf("getBox() keys = %q, want stale box id then name fallback", gotKeys)
+	if len(gotKeys) < 2 || gotKeys[0] != "box-stale" || gotKeys[1] != "alice" {
+		t.Fatalf("getBox() leading keys = %q, want stale box id then name fallback", gotKeys)
 	}
 	if startCalls != 1 {
 		t.Fatalf("startBox() calls = %d, want 1", startCalls)
@@ -1010,8 +1040,8 @@ func TestStopFallsBackToNameAndRefreshesStoredAgentState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stop() error = %v", err)
 	}
-	if strings.Join(gotKeys, ",") != "box-stale,alice" {
-		t.Fatalf("getBox() keys = %q, want stale box id then name fallback", gotKeys)
+	if len(gotKeys) < 2 || gotKeys[0] != "box-stale" || gotKeys[1] != "alice" {
+		t.Fatalf("getBox() leading keys = %q, want stale box id then name fallback", gotKeys)
 	}
 	if stopCalls != 1 {
 		t.Fatalf("stopBox() calls = %d, want 1", stopCalls)
@@ -1122,13 +1152,12 @@ func TestEnsureBootstrapStateForceRecreatePrefersStoredManagerBoxID(t *testing.T
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "agents.json")
 	data, err := json.Marshal(persistedState{
-		Agents: []Agent{
+		Agents: []persistedAgent{
 			{
 				ID:        ManagerUserID,
 				Name:      ManagerName,
 				Role:      RoleManager,
 				BoxID:     "box-old",
-				Status:    "running",
 				CreatedAt: time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC),
 			},
 		},
@@ -1215,13 +1244,12 @@ func TestEnsureBootstrapStateForceRecreateResetsManagerHomeBeforeCreate(t *testi
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "agents.json")
 	data, err := json.Marshal(persistedState{
-		Agents: []Agent{
+		Agents: []persistedAgent{
 			{
 				ID:        ManagerUserID,
 				Name:      ManagerName,
 				Role:      RoleManager,
 				BoxID:     "box-old",
-				Status:    "running",
 				CreatedAt: time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC),
 			},
 		},
@@ -1340,13 +1368,12 @@ func TestEnsureBootstrapStateReusesStoredManagerBoxIDWithoutForce(t *testing.T) 
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "agents.json")
 	data, err := json.Marshal(persistedState{
-		Agents: []Agent{
+		Agents: []persistedAgent{
 			{
 				ID:        ManagerUserID,
 				Name:      ManagerName,
 				Role:      RoleManager,
 				BoxID:     "box-old",
-				Status:    "running",
 				CreatedAt: time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC),
 			},
 		},

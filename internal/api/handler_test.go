@@ -750,6 +750,55 @@ func TestHandleAgentsListReturnsUnifiedAgents(t *testing.T) {
 	}
 }
 
+func TestHandleAgentsListHydratesStatusFromSandboxInfo(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	runtimeHome, err := agentSandboxRuntimeHomeForTest("alice")
+	if err != nil {
+		t.Fatalf("agentSandboxRuntimeHomeForTest() error = %v", err)
+	}
+	provider := sandboxtest.NewProvider()
+	rt := sandboxtest.NewRuntime()
+	rt.Instances["box-stored"] = sandboxtest.NewInstance(sandbox.Info{
+		ID:        "box-live",
+		Name:      "alice",
+		State:     sandbox.StateRunning,
+		CreatedAt: time.Date(2026, 3, 28, 10, 0, 0, 0, time.UTC),
+	})
+	provider.Runtimes[runtimeHome] = rt
+
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "agents.json")
+	if err := writeSeededAgents(statePath, []agent.Agent{
+		{ID: "u-alice", Name: "alice", BoxID: "box-stored", Role: agent.RoleWorker, Status: "stale", CreatedAt: time.Date(2026, 3, 28, 10, 0, 0, 0, time.UTC)},
+	}); err != nil {
+		t.Fatalf("writeSeededAgents() error = %v", err)
+	}
+	svc, err := agent.NewService(config.ModelConfig{}, config.ServerConfig{}, "", statePath, agent.WithSandboxProvider(provider))
+	if err != nil {
+		t.Fatalf("agent.NewService() error = %v", err)
+	}
+
+	srv := &Handler{svc: svc}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/agents", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var got []agent.Agent
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(agents) = %d, want 1", len(got))
+	}
+	if got[0].Status != string(sandbox.StateRunning) || got[0].BoxID != "box-live" {
+		t.Fatalf("agent = %+v, want live running status and refreshed box id", got[0])
+	}
+}
+
 func TestHandleAgentsGetByIDReturnsAgent(t *testing.T) {
 	svc := mustNewSeededService(t, []agent.Agent{
 		{ID: "u-alice", Name: "alice", Role: agent.RoleWorker, CreatedAt: time.Date(2026, 3, 28, 10, 0, 0, 0, time.UTC)},
@@ -2113,6 +2162,14 @@ func writeSeededAgents(statePath string, agents []agent.Agent) error {
 		return err
 	}
 	return os.WriteFile(statePath, append(data, '\n'), 0o600)
+}
+
+func agentSandboxRuntimeHomeForTest(agentName string) (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(homeDir, config.AppDirName, "agents", agentName, config.RuntimeHomeDirName), nil
 }
 
 func containsMember(members []string, want string) bool {
