@@ -1153,17 +1153,13 @@ func (s *Service) contentWithMentionPrefixLocked(content, mentionID string) (str
 		return content, nil
 	}
 
-	managerID, ok := s.byHandle["manager"]
+	user, ok := s.users[mentionID]
 	if !ok {
-		managerID = "u-manager"
-	}
-	user, ok := s.users[managerID]
-	if !ok {
-		return "", fmt.Errorf("manager user not found")
+		return "", fmt.Errorf("mentioned user not found")
 	}
 	handle := strings.TrimSpace(user.Handle)
 	if handle == "" {
-		return "", fmt.Errorf("manager user has no handle")
+		return "", fmt.Errorf("mentioned user has no handle")
 	}
 
 	prefix := "@" + handle

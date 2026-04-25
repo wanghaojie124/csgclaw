@@ -165,15 +165,15 @@ func TestCreateMessagePrefixesMentionHandle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateMessage() error = %v", err)
 	}
-	if message.Content != "@manager hi" {
-		t.Fatalf("CreateMessage() content = %q, want @manager hi", message.Content)
+	if message.Content != "@dev hi" {
+		t.Fatalf("CreateMessage() content = %q, want @dev hi", message.Content)
 	}
-	if len(message.Mentions) != 1 || message.Mentions[0] != "u-manager" {
-		t.Fatalf("CreateMessage() mentions = %+v, want [u-manager]", message.Mentions)
+	if len(message.Mentions) != 1 || message.Mentions[0] != "u-dev" {
+		t.Fatalf("CreateMessage() mentions = %+v, want [u-dev]", message.Mentions)
 	}
 }
 
-func TestCreateMessageWithMentionIDUsesManagerHandle(t *testing.T) {
+func TestCreateMessageWithMissingMentionIDFails(t *testing.T) {
 	svc := NewServiceFromBootstrap(Bootstrap{
 		CurrentUserID: "u-admin",
 		Users:         []User{{ID: "u-admin", Name: "admin", Handle: "admin"}},
@@ -186,11 +186,11 @@ func TestCreateMessageWithMentionIDUsesManagerHandle(t *testing.T) {
 		Content:   "hi",
 		MentionID: "u-missing",
 	})
-	if err != nil {
-		t.Fatalf("CreateMessage() error = %v", err)
+	if err == nil {
+		t.Fatalf("CreateMessage() error = nil, want mentioned user not found")
 	}
-	if message.Content != "@manager hi" {
-		t.Fatalf("CreateMessage() content = %q, want @manager hi", message.Content)
+	if message.Content != "" {
+		t.Fatalf("CreateMessage() content = %q, want empty on error", message.Content)
 	}
 }
 

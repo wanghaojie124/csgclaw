@@ -1298,11 +1298,11 @@ func TestHandleMessagesPostPrefixesMentionID(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if got.Content != "@manager hi" {
-		t.Fatalf("content = %q, want @manager hi", got.Content)
+	if got.Content != "@dev hi" {
+		t.Fatalf("content = %q, want @dev hi", got.Content)
 	}
-	if len(got.Mentions) != 1 || got.Mentions[0] != "u-manager" {
-		t.Fatalf("mentions = %+v, want u-manager", got.Mentions)
+	if len(got.Mentions) != 1 || got.Mentions[0] != "u-dev" {
+		t.Fatalf("mentions = %+v, want u-dev", got.Mentions)
 	}
 }
 

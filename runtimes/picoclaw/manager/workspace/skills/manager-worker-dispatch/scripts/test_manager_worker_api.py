@@ -95,6 +95,18 @@ class TrackingDecisionTests(unittest.TestCase):
         self.assertEqual(decision["output"]["event"], "waiting-for-task-passes")
         self.assertEqual(decision["output"]["task_id"], 1)
 
+    def test_waits_for_task_passes_when_csgclaw_message_has_mention_prefix(self):
+        task1 = make_task(1, "dev", passes=False)
+        messages = [
+            make_message(BOT_ID, f"@dev {dispatch_message(task1)}", "2026-04-10T08:26:40Z"),
+        ]
+
+        decision = self.decide([task1, make_task(2, "qa", passes=False)], messages)
+
+        self.assertEqual(decision["kind"], "wait")
+        self.assertEqual(decision["output"]["event"], "waiting-for-task-passes")
+        self.assertEqual(decision["output"]["task_id"], 1)
+
     def test_waits_for_assignee_reply_after_previous_task_passes(self):
         task1 = make_task(1, "ux", passes=True)
         task2 = make_task(2, "dev", passes=False)
@@ -165,9 +177,9 @@ class TrackingDecisionTests(unittest.TestCase):
         self.assertIn(ROOM_ID, str(ctx.exception))
 
 
-class FeishuTrackingDecisionTests(unittest.TestCase):
+class SimpleTrackingDecisionTests(unittest.TestCase):
     def decide(self, tasks, previous_pending_index=None):
-        return manager_worker_api.decide_feishu_tracking_action(
+        return manager_worker_api.decide_simple_tracking_action(
             tasks,
             room_id=ROOM_ID,
             todo_path=TODO_PATH,
@@ -208,7 +220,7 @@ class FeishuTrackingDecisionTests(unittest.TestCase):
         self.assertEqual(decision["output"]["event"], "waiting-for-task-passes")
         self.assertEqual(decision["output"]["task_id"], 2)
 
-    def test_explicit_feishu_mention_id_is_used(self):
+    def test_explicit_mention_id_is_used(self):
         task1 = make_task(1, "ux", passes=False)
         task1["mention_id"] = "custom-worker"
 
@@ -216,6 +228,15 @@ class FeishuTrackingDecisionTests(unittest.TestCase):
 
         self.assertEqual(decision["kind"], "dispatch")
         self.assertEqual(decision["mention_id"], "custom-worker")
+
+    def test_assignee_id_is_used_for_simple_dispatch(self):
+        task1 = make_task(1, "ux", passes=False)
+        task1["assignee_id"] = "u-explicit"
+
+        decision = self.decide([task1])
+
+        self.assertEqual(decision["kind"], "dispatch")
+        self.assertEqual(decision["mention_id"], "u-explicit")
 
 
 class CSGClawAPITests(unittest.TestCase):
