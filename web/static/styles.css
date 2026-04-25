@@ -1193,6 +1193,19 @@ body::after {
   position: relative;
 }
 
+.composer-placeholder {
+  position: absolute;
+  top: 20px;
+  left: 18px;
+  right: 82px;
+  color: var(--muted);
+  pointer-events: none;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .composer-editor {
   width: 100%;
   min-height: 64px;
@@ -1213,36 +1226,18 @@ body::after {
 }
 
 .message-mention {
-  display: inline-block;
-  padding: 0 0.28rem;
-  margin: 0 0.08rem;
-  border-radius: 999px;
-  color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 14%, white);
+  color: rgb(20, 86, 240);
   font-weight: 600;
 }
 
 .message-row.own .message-mention {
-  color: white;
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.composer-editor.empty::before {
-  content: attr(data-placeholder);
-  color: var(--muted);
-  pointer-events: none;
+  color: rgb(20, 86, 240);
 }
 
 .composer-mention-token {
-  display: inline-flex;
-  align-items: center;
-  max-width: 100%;
-  margin: 0 0.1rem;
-  padding: 0 0.38rem;
-  border-radius: 999px;
-  color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 14%, white);
+  color: rgb(20, 86, 240);
   font-weight: 600;
+  margin: 0;
   white-space: nowrap;
 }
 

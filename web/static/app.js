@@ -390,7 +390,7 @@ function App() {
   });
   const [data, setData] = useState(null);
   const [activeConversationId, setActiveConversationId] = useState("");
-  const [draftSegments, setDraftSegments] = useState([]);
+  const [draftsByConversationId, setDraftsByConversationId] = useState({});
   const [composerMentionState, setComposerMentionState] = useState(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
@@ -487,6 +487,10 @@ function App() {
       .slice(0, 5);
   }, [data, activeConversation, composerMentionState]);
 
+  const draftSegments = useMemo(
+    () => draftsByConversationId[activeConversationId] ?? [],
+    [draftsByConversationId, activeConversationId],
+  );
   const draftText = useMemo(() => segmentsToPlainText(draftSegments), [draftSegments]);
 
   useEffect(() => {
@@ -537,6 +541,34 @@ function App() {
     }
     el.scrollTop = el.scrollHeight;
   }, [activeConversationId, visibleMessages.length]);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) {
+      return;
+    }
+    if (!areComposerSegmentsEqual(parseComposerSegments(editor), draftSegments)) {
+      renderComposerSegments(editor, draftSegments);
+    }
+    setComposerMentionState(null);
+  }, [activeConversationId]);
+
+  useEffect(() => {
+    if (!activeConversationId || showCreateRoom || showInvite) {
+      return;
+    }
+    const editor = editorRef.current;
+    if (!editor) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      if (editorRef.current !== editor) {
+        return;
+      }
+      editor.focus();
+      placeCaretAtEnd(editor);
+    });
+  }, [activeConversationId, showCreateRoom, showInvite]);
 
   async function sendMessage() {
     if (!data || !activeConversation || !draftText.trim()) {
@@ -666,6 +698,14 @@ function App() {
 
     const remainingRooms = rooms.filter((item) => item.id !== roomID);
     setData((current) => removeConversationFromData(current, roomID));
+    setDraftsByConversationId((current) => {
+      if (!current[roomID]) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[roomID];
+      return next;
+    });
     setComposerError("");
     setSubmitError("");
     if (activeConversationId === roomID) {
@@ -731,10 +771,11 @@ function App() {
 
   function syncComposerFromEditor() {
     const editor = editorRef.current;
-    if (!editor) {
+    if (!editor || !activeConversationId) {
       return;
     }
-    setDraftSegments(parseComposerSegments(editor));
+    const segments = parseComposerSegments(editor);
+    setDraftsByConversationId((current) => updateDrafts(current, activeConversationId, segments));
     setComposerMentionState(getComposerMentionState(editor));
   }
 
@@ -744,7 +785,9 @@ function App() {
       editor.innerHTML = "";
       editor.focus();
     }
-    setDraftSegments([]);
+    if (activeConversationId) {
+      setDraftsByConversationId((current) => updateDrafts(current, activeConversationId, []));
+    }
     setComposerMentionState(null);
   }
 
@@ -1000,12 +1043,15 @@ function App() {
                     : null}
                   <div className="composer-box">
                     <div className="composer-input-wrap">
+                      ${draftSegments.length === 0
+                        ? html`<div className="composer-placeholder" aria-hidden="true">${t("inputPlaceholder")}</div>`
+                        : null}
                       <div
                         ref=${editorRef}
-                        className=${`composer-editor ${draftSegments.length === 0 ? "empty" : ""}`}
+                        className="composer-editor"
                         contentEditable="true"
                         suppressContentEditableWarning=${true}
-                        data-placeholder=${t("inputPlaceholder")}
+                        aria-label=${t("inputPlaceholder")}
                         onInput=${syncComposerFromEditor}
                         onClick=${syncComposerFromEditor}
                         onKeyDown=${onComposerKeyDown}
@@ -1493,6 +1539,35 @@ function createMentionTokenElement(user) {
   return token;
 }
 
+function renderComposerSegments(root, segments) {
+  if (!root) {
+    return;
+  }
+  root.replaceChildren();
+  for (const segment of segments ?? []) {
+    if (!segment) {
+      continue;
+    }
+    if (segment.type === "mention") {
+      root.append(createMentionTokenElement({
+        id: segment.userId,
+        name: segment.userName,
+        handle: segment.userName,
+      }));
+      continue;
+    }
+    const parts = String(segment.text ?? "").split("\n");
+    parts.forEach((part, index) => {
+      if (part) {
+        root.append(document.createTextNode(part));
+      }
+      if (index < parts.length - 1) {
+        root.append(document.createElement("br"));
+      }
+    });
+  }
+}
+
 function parseComposerSegments(root) {
   if (!root) {
     return [];
@@ -1570,6 +1645,39 @@ function segmentsToPlainText(segments) {
     }
     return segment.text ?? "";
   }).join("");
+}
+
+function areComposerSegmentsEqual(left, right) {
+  if (left === right) {
+    return true;
+  }
+  if (!left || !right || left.length !== right.length) {
+    return false;
+  }
+  return left.every((segment, index) => {
+    const other = right[index];
+    return segment.type === other?.type
+      && segment.text === other?.text
+      && segment.userId === other?.userId
+      && segment.userName === other?.userName;
+  });
+}
+
+function updateDrafts(current, conversationID, segments) {
+  const normalized = normalizeComposerSegments(segments ?? []);
+  const existing = current[conversationID] ?? [];
+  if (areComposerSegmentsEqual(existing, normalized)) {
+    return current;
+  }
+  if (normalized.length === 0) {
+    if (!current[conversationID]) {
+      return current;
+    }
+    const next = { ...current };
+    delete next[conversationID];
+    return next;
+  }
+  return { ...current, [conversationID]: normalized };
 }
 
 function serializeComposerSegments(segments) {
@@ -1759,6 +1867,10 @@ function placeCaretNearNode(root, node, direction) {
   selection.removeAllRanges();
   selection.addRange(range);
   root.focus();
+}
+
+function placeCaretAtEnd(root) {
+  placeCaretNearNode(root, root.lastChild, "backward");
 }
 
 function parseStructuredMessage(content) {
