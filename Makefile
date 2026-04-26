@@ -16,6 +16,7 @@ GO ?= go
 GOFMT ?= gofmt
 TARGET_OS ?= $(shell $(GO) env GOOS)
 TARGET_ARCH ?= $(shell $(GO) env GOARCH)
+CLI_BIN ?= $(BIN_DIR)/csgclaw-cli
 
 ONBOARD_BASE_URL ?= http://127.0.0.1:4000
 ONBOARD_API_KEY ?= sk-1234567890
@@ -39,8 +40,8 @@ help:
 		'make test-without-boxlite-sdk - run Go tests without the BoxLite SDK provider' \
 		'make build     - build $(BIN) with the BoxLite SDK provider enabled' \
 		'make build-without-boxlite-sdk - build $(BIN) without the BoxLite SDK provider' \
-		'make build-csgclaw-cli - build bin/csgclaw-cli for TARGET_OS/TARGET_ARCH (defaults to current platform)' \
-		'make build-csgclaw-cli-for-picoclaw - build bin/csgclaw-cli for linux/arm64' \
+		'make build-csgclaw-cli - build $(CLI_BIN) for TARGET_OS/TARGET_ARCH (defaults to current platform)' \
+		'make build-csgclaw-cli-for-picoclaw - build PicoClaw CLI binaries for linux/amd64 and linux/arm64' \
 		'make build-all - build bin/csgclaw and bin/csgclaw-cli' \
 		'make run       - run the server in foreground' \
 		'make onboard   - initialize ~/.csgclaw/config.toml with defaults' \
@@ -83,10 +84,11 @@ build-csgclaw: boxlite-setup
 
 build-csgclaw-cli: sync-agent-runtimes
 	mkdir -p $(BIN_DIR)
-	env GOCACHE=$(GOCACHE) GOOS=$(TARGET_OS) GOARCH=$(TARGET_ARCH) $(GO) build -ldflags "$(CLI_LDFLAGS)" -o $(BIN_DIR)/csgclaw-cli ./cmd/csgclaw-cli
+	env GOCACHE=$(GOCACHE) GOOS=$(TARGET_OS) GOARCH=$(TARGET_ARCH) $(GO) build -ldflags "$(CLI_LDFLAGS)" -o $(CLI_BIN) ./cmd/csgclaw-cli
 
 build-csgclaw-cli-for-picoclaw:
-	$(MAKE) build-csgclaw-cli TARGET_OS=linux TARGET_ARCH=arm64
+	$(MAKE) build-csgclaw-cli TARGET_OS=linux TARGET_ARCH=amd64 CLI_BIN=$(BIN_DIR)/csgclaw-cli_linux_amd64
+	$(MAKE) build-csgclaw-cli TARGET_OS=linux TARGET_ARCH=arm64 CLI_BIN=$(BIN_DIR)/csgclaw-cli_linux_arm64
 
 build-all: build-csgclaw build-csgclaw-cli
 
