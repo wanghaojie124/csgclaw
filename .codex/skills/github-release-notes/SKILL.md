@@ -10,9 +10,10 @@ Generate release notes from a user-selected set of commits. Keep the output conc
 ## Workflow
 
 1. Determine the exact commits to include.
-2. Run `scripts/collect_commits.py` with the selected SHAs or ranges.
-3. Read the emitted commit list or JSON payload.
-4. Write release notes in this structure unless the user asks for another format:
+2. If the user gives a start and end commit and expects both included, convert that into an inclusive Git range before collecting commits. Prefer `start^..end` for a closed interval `[start, end]`.
+3. Run `scripts/collect_commits.py` with the selected SHAs or ranges.
+4. Read the emitted commit list or JSON payload.
+5. Write release notes in this structure unless the user asks for another format:
 
 ```md
 ## What's Changed
@@ -44,7 +45,8 @@ python3 ~/.codex/skills/github-release-notes/scripts/collect_commits.py \
 Useful patterns:
 
 - Pass individual SHAs to preserve a curated order.
-- Pass a range like `base..head` to include everything in commit order.
+- Pass a range like `base^..head` to include both `base` and `head` in commit order.
+- Use plain `base..head` only when you intentionally want an open interval that excludes `base`.
 - Use `--format markdown` when the full changelog bullets are all you need.
 
 ## Writing Rules
@@ -70,3 +72,16 @@ Useful patterns:
 ## Example Prompt
 
 `Use $github-release-notes to draft release notes from commits 2bb0481 1db7019 16258ce 9afdd2c 9b85fd8 9b6969e in the current repo.`
+
+Inclusive range example:
+
+`Use $github-release-notes to draft release notes from 0e01b0a623db78040ae059c0a4faa8675b06dc26 to the latest commit in the current repo.`
+
+Interpret that as:
+
+```bash
+python3 ~/.codex/skills/github-release-notes/scripts/collect_commits.py \
+  --repo /path/to/repo \
+  --format json \
+  0e01b0a623db78040ae059c0a4faa8675b06dc26^..HEAD
+```
