@@ -28,11 +28,6 @@ mkdir -p "$DIST_DIR"
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 
-build_args=()
-if [ -n "$GO_BUILD_TAGS" ]; then
-  build_args+=(-tags "$GO_BUILD_TAGS")
-fi
-
 binary_name="$APP"
 archive_ext="tar.gz"
 if [ "$GOOS_TARGET" = "windows" ]; then
@@ -40,8 +35,13 @@ if [ "$GOOS_TARGET" = "windows" ]; then
   archive_ext="zip"
 fi
 
-env GOOS="$GOOS_TARGET" GOARCH="$GOARCH_TARGET" GOCACHE="$GOCACHE" \
-  go build "${build_args[@]}" -ldflags "${LDFLAGS}" -o "${tmpdir}/${binary_name}" "${CMD_PATH}"
+if [ -n "$GO_BUILD_TAGS" ]; then
+  env GOOS="$GOOS_TARGET" GOARCH="$GOARCH_TARGET" GOCACHE="$GOCACHE" \
+    go build -tags "$GO_BUILD_TAGS" -ldflags "${LDFLAGS}" -o "${tmpdir}/${binary_name}" "${CMD_PATH}"
+else
+  env GOOS="$GOOS_TARGET" GOARCH="$GOARCH_TARGET" GOCACHE="$GOCACHE" \
+    go build -ldflags "${LDFLAGS}" -o "${tmpdir}/${binary_name}" "${CMD_PATH}"
+fi
 
 archive_base="${APP}_${VERSION}_${GOOS_TARGET}_${GOARCH_TARGET}"
 
