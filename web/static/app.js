@@ -833,116 +833,122 @@ function App() {
   return html`
     <${React.Fragment}>
       <div className=${`app-shell ${isSidebarCollapsed ? "sidebar-collapsed" : ""}`}>
-        <aside className=${`sidebar ${isSidebarCollapsed ? "collapsed" : ""}`}>
-          <div className="sidebar-header">
-            <div className="sidebar-brand-row">
-              <div className="sidebar-brand">CSGClaw</div>
-              <div className="language-switch sidebar-language-switch" role="group" aria-label=${t("languageSwitcher")}>
-                <span className="language-switch-icon" aria-hidden="true"><${GlobeIcon} /></span>
-                <div className=${`language-switch-track ${locale === "en" ? "is-en" : "is-zh"}`}>
-                  <span className="language-switch-thumb" aria-hidden="true"></span>
-                  <button
-                    className=${`language-toggle ${locale === "zh" ? "active" : ""}`}
-                    aria-pressed=${locale === "zh"}
-                    title=${t("languageOptionZh")}
-                    onClick=${() => setLocale("zh")}
-                  >
-                    中
-                  </button>
-                  <button
-                    className=${`language-toggle ${locale === "en" ? "active" : ""}`}
-                    aria-pressed=${locale === "en"}
-                    title=${t("languageOptionEn")}
-                    onClick=${() => setLocale("en")}
-                  >
-                    EN
-                  </button>
+        <div className="sidebar-slot">
+          <aside
+            className=${`sidebar ${isSidebarCollapsed ? "collapsed" : ""}`}
+            aria-hidden=${isSidebarCollapsed}
+            inert=${isSidebarCollapsed}
+          >
+            <div className="sidebar-header">
+              <div className="sidebar-brand-row">
+                <div className="sidebar-brand">CSGClaw</div>
+                <div className="language-switch sidebar-language-switch" role="group" aria-label=${t("languageSwitcher")}>
+                  <span className="language-switch-icon" aria-hidden="true"><${GlobeIcon} /></span>
+                  <div className=${`language-switch-track ${locale === "en" ? "is-en" : "is-zh"}`}>
+                    <span className="language-switch-thumb" aria-hidden="true"></span>
+                    <button
+                      className=${`language-toggle ${locale === "zh" ? "active" : ""}`}
+                      aria-pressed=${locale === "zh"}
+                      title=${t("languageOptionZh")}
+                      onClick=${() => setLocale("zh")}
+                    >
+                      中
+                    </button>
+                    <button
+                      className=${`language-toggle ${locale === "en" ? "active" : ""}`}
+                      aria-pressed=${locale === "en"}
+                      title=${t("languageOptionEn")}
+                      onClick=${() => setLocale("en")}
+                    >
+                      EN
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <button
-                className="sidebar-toggle-button"
-                aria-label=${t("collapseSidebar")}
-                aria-pressed=${false}
-                title=${t("collapseSidebar")}
-                onClick=${() => setIsSidebarCollapsed(true)}
-              >
-                <span className="sidebar-toggle-mark"><${SidebarToggleIcon} /></span>
-              </button>
-            </div>
-            <div className="sidebar-header-row">
-              <nav className="sidebar-nav" aria-label=${t("conversationSection")}>
                 <button
-                  className="sidebar-nav-button"
-                  aria-label=${t("createRoom")}
-                  title=${t("createRoom")}
-                  onClick=${() => openCreateRoomModal()}
-                >
-                  <span className="sidebar-nav-icon" aria-hidden="true"><${RoomPlusIcon} /></span>
-                  <span className="sidebar-nav-label">${t("createRoom")}</span>
-                </button>
-                <button
-                  className="sidebar-nav-button active"
-                  aria-current="page"
-                  aria-label=${`${t("conversationSection")} (${roomCount})`}
-                  title=${t("conversationSection")}
-                  onClick=${() => setIsSidebarCollapsed(false)}
-                >
-                  <span className="sidebar-nav-icon" aria-hidden="true"><${RoomsIcon} /></span>
-                  <span className="sidebar-nav-label">${t("conversationSection")}</span>
-                  <span className="sidebar-nav-count" aria-hidden="true">${roomCount}</span>
-                </button>
-              </nav>
-            </div>
-          </div>
-          <div className="conversation-list">
-            <${ConversationSection}
-              title=${t("conversationSection")}
-              items=${rooms}
-              activeConversationId=${activeConversationId}
-              currentUserID=${data.current_user_id}
-              usersById=${usersById}
-              locale=${locale}
-              t=${t}
-              onSelect=${setActiveConversationId}
-              onDelete=${deleteRoom}
-            />
-          </div>
-        </aside>
-
-        ${isSidebarCollapsed
-          ? html`
-              <div className="sidebar-rail">
-                <button
-                  className="sidebar-expand-button"
-                  aria-label=${t("expandSidebar")}
-                  aria-pressed=${true}
-                  title=${t("expandSidebar")}
-                  onClick=${() => setIsSidebarCollapsed(false)}
+                  className="sidebar-toggle-button"
+                  aria-label=${t("collapseSidebar")}
+                  aria-pressed=${false}
+                  title=${t("collapseSidebar")}
+                  onClick=${() => setIsSidebarCollapsed(true)}
                 >
                   <span className="sidebar-toggle-mark"><${SidebarToggleIcon} /></span>
                 </button>
-                <nav className="sidebar-rail-nav" aria-label=${t("conversationSection")}>
+              </div>
+              <div className="sidebar-header-row">
+                <nav className="sidebar-nav" aria-label=${t("conversationSection")}>
                   <button
-                    className="sidebar-rail-button"
+                    className="sidebar-nav-button"
                     aria-label=${t("createRoom")}
                     title=${t("createRoom")}
                     onClick=${() => openCreateRoomModal()}
                   >
-                    <span className="sidebar-rail-icon" aria-hidden="true"><${RoomPlusIcon} /></span>
+                    <span className="sidebar-nav-icon" aria-hidden="true"><${RoomPlusIcon} /></span>
+                    <span className="sidebar-nav-label">${t("createRoom")}</span>
                   </button>
                   <button
-                    className="sidebar-rail-button active"
+                    className="sidebar-nav-button active"
                     aria-current="page"
-                    aria-label=${t("conversationSection")}
+                    aria-label=${`${t("conversationSection")} (${roomCount})`}
                     title=${t("conversationSection")}
                     onClick=${() => setIsSidebarCollapsed(false)}
                   >
-                    <span className="sidebar-rail-icon" aria-hidden="true"><${RoomsIcon} /></span>
+                    <span className="sidebar-nav-icon" aria-hidden="true"><${RoomsIcon} /></span>
+                    <span className="sidebar-nav-label">${t("conversationSection")}</span>
+                    <span className="sidebar-nav-count" aria-hidden="true">${roomCount}</span>
                   </button>
                 </nav>
               </div>
-            `
-          : null}
+            </div>
+            <div className="conversation-list">
+              <${ConversationSection}
+                title=${t("conversationSection")}
+                items=${rooms}
+                activeConversationId=${activeConversationId}
+                currentUserID=${data.current_user_id}
+                usersById=${usersById}
+                locale=${locale}
+                t=${t}
+                onSelect=${setActiveConversationId}
+                onDelete=${deleteRoom}
+              />
+            </div>
+          </aside>
+
+          <div
+            className=${`sidebar-rail ${isSidebarCollapsed ? "visible" : ""}`}
+            aria-hidden=${!isSidebarCollapsed}
+            inert=${!isSidebarCollapsed}
+          >
+            <button
+              className="sidebar-expand-button"
+              aria-label=${t("expandSidebar")}
+              aria-pressed=${true}
+              title=${t("expandSidebar")}
+              onClick=${() => setIsSidebarCollapsed(false)}
+            >
+              <span className="sidebar-toggle-mark"><${SidebarToggleIcon} /></span>
+            </button>
+            <nav className="sidebar-rail-nav" aria-label=${t("conversationSection")}>
+              <button
+                className="sidebar-rail-button"
+                aria-label=${t("createRoom")}
+                title=${t("createRoom")}
+                onClick=${() => openCreateRoomModal()}
+              >
+                <span className="sidebar-rail-icon" aria-hidden="true"><${RoomPlusIcon} /></span>
+              </button>
+              <button
+                className="sidebar-rail-button active"
+                aria-current="page"
+                aria-label=${t("conversationSection")}
+                title=${t("conversationSection")}
+                onClick=${() => setIsSidebarCollapsed(false)}
+              >
+                <span className="sidebar-rail-icon" aria-hidden="true"><${RoomsIcon} /></span>
+              </button>
+            </nav>
+          </div>
+        </div>
 
         <main className="chat-panel">
           ${activeConversation

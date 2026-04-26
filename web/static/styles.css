@@ -67,8 +67,9 @@ body::after {
 }
 
 .app-shell {
+  --sidebar-slot-width: 304px;
   display: grid;
-  grid-template-columns: 304px minmax(0, 1fr);
+  grid-template-columns: minmax(0, var(--sidebar-slot-width)) minmax(0, 1fr);
   min-height: 100vh;
   min-height: 100dvh;
   height: 100vh;
@@ -76,10 +77,18 @@ body::after {
   padding: 0;
   gap: 0;
   overflow: hidden;
+  transition: grid-template-columns 280ms ease;
 }
 
 .app-shell.sidebar-collapsed {
-  grid-template-columns: 72px minmax(0, 1fr);
+  --sidebar-slot-width: 72px;
+}
+
+.sidebar-slot {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .sidebar,
@@ -97,11 +106,20 @@ body::after {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  position: relative;
+  position: absolute;
+  inset: 0;
+  transition: opacity 220ms ease, transform 280ms ease, visibility 0s linear 0s;
+  opacity: 1;
+  transform: translateX(0);
+  visibility: visible;
 }
 
 .sidebar.collapsed {
-  display: none;
+  opacity: 0;
+  transform: translateX(-22px);
+  visibility: hidden;
+  pointer-events: none;
+  transition-delay: 0s, 0s, 280ms;
 }
 
 .sidebar-rail {
@@ -116,8 +134,24 @@ body::after {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: flex-start;
   gap: 24px;
   padding: 24px 10px;
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transform: translateX(-14px);
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 220ms ease, transform 280ms ease, visibility 0s linear 280ms;
+}
+
+.sidebar-rail.visible {
+  opacity: 1;
+  transform: translateX(0);
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 80ms, 80ms, 0s;
 }
 
 .sidebar::before {
@@ -1475,12 +1509,14 @@ body::after {
 
 @media (max-width: 960px) {
   .app-shell {
+    --sidebar-slot-width: 100%;
     grid-template-columns: 1fr;
     padding: 0;
   }
 
   .app-shell.sidebar-collapsed {
-    grid-template-columns: 72px minmax(0, 1fr);
+    --sidebar-slot-width: 72px;
+    grid-template-columns: minmax(0, var(--sidebar-slot-width)) minmax(0, 1fr);
   }
 
   .sidebar {
