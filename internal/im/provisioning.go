@@ -82,7 +82,7 @@ func (p *Provisioner) scheduleBootstrapMessage(roomID, name, description string)
 func buildWorkerBootstrapMessage(name, description string) string {
 	name = strings.TrimSpace(name)
 	description = strings.TrimSpace(description)
-	message := fmt.Sprintf("@%s Write this down in your memory: your name is %s.", name, name)
+	message := fmt.Sprintf("Write this down in your memory: your name is %s.", name)
 	if description == "" {
 		return message
 	}

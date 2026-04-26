@@ -120,7 +120,8 @@ const (
 
 	DefaultHTTPPort           = apiclient.DefaultHTTPPort
 	DefaultAccessToken        = "your_access_token"
-	DefaultManagerImage       = "opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/picoclaw:2026.4.24.0"
+	// Temporary default; later switch to opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/picoclaw.
+	DefaultManagerImage       = "ghcr.io/russellluo/picoclaw:2026.4.26"
 	CSGHubProvider            = "csghub"
 	BoxLiteSDKProvider        = "boxlite-sdk"
 	BoxLiteCLIProvider        = "boxlite-cli"

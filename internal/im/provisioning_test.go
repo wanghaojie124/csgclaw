@@ -62,7 +62,7 @@ func TestProvisionerEnsureAgentUserPublishesBootstrapRoom(t *testing.T) {
 	if third.Message.SenderID != "u-admin" {
 		t.Fatalf("third event.Message.SenderID = %q, want %q", third.Message.SenderID, "u-admin")
 	}
-	wantContent := "@Alice Write this down in your memory: your name is Alice. Your responsibility is test lead"
+	wantContent := "Write this down in your memory: your name is Alice. Your responsibility is test lead"
 	if third.Message.Content != wantContent {
 		t.Fatalf("third event.Message.Content = %q, want %q", third.Message.Content, wantContent)
 	}
