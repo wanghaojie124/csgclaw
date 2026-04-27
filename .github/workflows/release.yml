@@ -92,3 +92,47 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.value }}
           files: dist/*
+
+      - name: Upload dist artifact for Gitee mirror
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dist-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+
+  mirror-gitee-release:
+    name: Mirror release assets to Gitee
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download release dist
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-dist-*
+          merge-multiple: true
+          path: dist
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to Gitee
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_REPO: ${{ vars.GITEE_REPO }}
+        shell: bash
+        run: |
+          if [ -z "${GITEE_TOKEN}" ] || [ -z "${GITEE_REPO}" ]; then
+            echo "GITEE_TOKEN or GITEE_REPO unset; skip Gitee mirror"
+            exit 0
+          fi
+          chmod +x scripts/publish-gitee-release.sh
+          ./scripts/publish-gitee-release.sh "${{ steps.ver.outputs.value }}"

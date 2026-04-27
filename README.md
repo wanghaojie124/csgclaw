@@ -14,13 +14,23 @@ CSGClaw is a multi-agent collaboration platform built by OpenCSG — designed ar
 
 ## Install
 
-**macOS / Linux:**
+**macOS / Linux (auto-select mirror):**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/OpenCSGs/csgclaw/main/scripts/install.sh | bash
 ```
 
-The installer downloads a prebuilt release binary and places it on your `PATH`. Prebuilt binaries are available for macOS arm64 and Linux amd64.
+The installer downloads a prebuilt release binary and places it on your `PATH`. It probes network reachability/latency and auto-selects GitHub or Gitee (prefers GitHub when both are similarly healthy). Prebuilt binaries are available for macOS arm64 and Linux amd64.
+
+Optional install flags:
+
+```bash
+# Force GitHub mirror
+curl -fsSL https://raw.githubusercontent.com/OpenCSGs/csgclaw/main/scripts/install.sh | CSGCLAW_MIRROR=github bash
+
+# Force Gitee mirror (if release assets are mirrored there)
+curl -fsSL https://raw.githubusercontent.com/OpenCSGs/csgclaw/main/scripts/install.sh | CSGCLAW_MIRROR=gitee REPO_GITEE=wang-haojie124/csgclaw bash
+```
 
 **Build from source:**
 
