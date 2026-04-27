@@ -113,13 +113,7 @@ func shouldNotifyBot(room Room, message Message, botID string) bool {
 	if !containsUserIDInRoom(room, botID) {
 		return false
 	}
-	if chatTypeForRoom(room) == "direct" {
-		return true
-	}
-	if containsMentionID(message.Mentions, botID) {
-		return true
-	}
-	return false
+	return true
 }
 
 func mentionsForBot(mentions []Mention, botID string) []string {

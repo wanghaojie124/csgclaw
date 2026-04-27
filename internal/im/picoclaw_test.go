@@ -40,7 +40,7 @@ func TestChatTypeForRoomRespectsIsDirect(t *testing.T) {
 	}
 }
 
-func TestShouldNotifyBotRequiresMentionInTwoMemberGroup(t *testing.T) {
+func TestShouldNotifyBotPushesForTwoMemberGroupWithoutMention(t *testing.T) {
 	room := Room{
 		ID:       "room-group",
 		IsDirect: false,
@@ -54,13 +54,8 @@ func TestShouldNotifyBotRequiresMentionInTwoMemberGroup(t *testing.T) {
 		CreatedAt: time.Now().UTC(),
 	}
 
-	if shouldNotifyBot(room, message, "u-bot") {
-		t.Fatal("shouldNotifyBot() = true, want false without mention in two-member group")
-	}
-
-	message.Mentions = []Mention{{ID: "u-bot", Name: "bot"}}
 	if !shouldNotifyBot(room, message, "u-bot") {
-		t.Fatal("shouldNotifyBot() = false, want true when bot is mentioned")
+		t.Fatal("shouldNotifyBot() = false, want true for room member without mention")
 	}
 }
 
@@ -79,7 +74,6 @@ func TestPublishMessageEventUsesGroupChatTypeForTwoMemberGroup(t *testing.T) {
 		ID:        "msg-1",
 		SenderID:  "u-admin",
 		Content:   "hello",
-		Mentions:  []Mention{{ID: "u-bot", Name: "bot"}},
 		CreatedAt: time.Now().UTC(),
 	}
 
