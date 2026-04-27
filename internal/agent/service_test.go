@@ -385,8 +385,16 @@ func TestLoadMigratesLegacyWorkersIntoAgents(t *testing.T) {
 	}
 }
 
-func TestDeleteRejectsManagerAgent(t *testing.T) {
-	svc, err := NewService(testModelConfig(), config.ServerConfig{}, "", "")
+func TestDeleteAllowsManagerAgent(t *testing.T) {
+	SetTestHooks(
+		func(_ *Service, _ string) (sandbox.Runtime, error) { return nil, nil },
+		nil,
+	)
+	defer ResetTestHooks()
+
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "agents.json")
+	svc, err := NewService(testModelConfig(), config.ServerConfig{}, "", statePath)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -397,13 +405,23 @@ func TestDeleteRejectsManagerAgent(t *testing.T) {
 		Role:      RoleManager,
 		CreatedAt: time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC),
 	}
-
-	err = svc.Delete(context.Background(), ManagerUserID)
-	if err == nil {
-		t.Fatal("Delete() error = nil, want reserved error")
+	if err := svc.saveLocked(); err != nil {
+		t.Fatalf("saveLocked() error = %v", err)
 	}
-	if !strings.Contains(err.Error(), "reserved") {
-		t.Fatalf("Delete() error = %q, want reserved error", err)
+
+	if err := svc.Delete(context.Background(), ManagerUserID); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	if _, ok := svc.Agent(ManagerUserID); ok {
+		t.Fatal("Agent() ok = true, want false after delete")
+	}
+
+	reloaded, err := NewService(config.ModelConfig{}, config.ServerConfig{}, "", statePath)
+	if err != nil {
+		t.Fatalf("NewService() reload error = %v", err)
+	}
+	if _, ok := reloaded.Agent(ManagerUserID); ok {
+		t.Fatal("reloaded Agent() ok = true, want false after delete")
 	}
 }
 

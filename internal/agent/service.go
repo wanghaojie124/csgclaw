@@ -752,9 +752,6 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	if !ok {
 		return fmt.Errorf("agent %q not found", id)
 	}
-	if isManagerAgent(existing) {
-		return fmt.Errorf("agent %q is reserved", id)
-	}
 
 	rt, err := s.ensureRuntime(existing.Name)
 	if err != nil {
