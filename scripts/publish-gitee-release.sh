@@ -23,8 +23,23 @@ fi
 
 api_base="https://gitee.com/api/v5/repos/${owner}/${repo}"
 
-json_get_id() {
-  sed -n 's/.*"id"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n 1
+json_get_top_level_number() {
+  local key="${1:?missing json key}"
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import json,sys
+key=sys.argv[1]
+try:
+    data=json.loads(sys.stdin.read())
+    value=data.get(key)
+    if isinstance(value, int):
+        print(value)
+except Exception:
+    pass
+' "$key"
+    return
+  fi
+  # Fallback parser for environments without python3.
+  sed -n "s/^[[:space:]]*\"${key}\"[[:space:]]*:[[:space:]]*\\([0-9][0-9]*\\).*/\\1/p" | head -n 1
 }
 
 release_id_for_tag() {
@@ -34,7 +49,7 @@ release_id_for_tag() {
   status="$(echo "$body" | tail -n 1)"
   body="$(echo "$body" | sed '$d')"
   if [ "$status" = "200" ]; then
-    printf '%s' "$body" | json_get_id
+    printf '%s' "$body" | json_get_top_level_number id
     return 0
   fi
   echo ""
@@ -93,7 +108,7 @@ rid="$(release_id_for_tag)"
 if [ -z "$rid" ]; then
   resp=""
   if resp="$(create_release)"; then
-    rid="$(printf '%s' "$resp" | json_get_id)"
+    rid="$(printf '%s' "$resp" | json_get_top_level_number id)"
   fi
   if [ -z "$rid" ]; then
     rid="$(release_id_for_tag)"
@@ -106,6 +121,15 @@ if [ -z "$rid" ]; then
     exit 1
   fi
 fi
+
+release_check="$(curl -sS -g -w '\n%{http_code}' "${api_base}/releases/${rid}?access_token=${GITEE_TOKEN}")"
+release_check_status="$(echo "$release_check" | tail -n 1)"
+if [ "$release_check_status" != "200" ]; then
+  echo "resolved release id is invalid for ${GITEE_REPO} tag ${VERSION}: ${rid} (HTTP ${release_check_status})" >&2
+  echo "$release_check" | sed '$d' >&2
+  exit 1
+fi
+echo "using Gitee release id ${rid} for tag ${VERSION}"
 
 for f in "${files[@]}"; do
   if [ ! -f "$f" ]; then
