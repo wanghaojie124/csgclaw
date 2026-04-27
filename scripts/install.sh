@@ -6,7 +6,7 @@ REPO="${REPO:-OpenCSGs/csgclaw}"
 VERSION="${VERSION:-latest}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 LIB_DIR="${LIB_DIR:-$HOME/.local/lib/${APP}}"
-BASE_URL="${BASE_URL:-https://github.com/${REPO}/releases/download}"
+BASE_URL="${BASE_URL:-https://csgclaw.opencsg.com/releases}"
 TMPDIR_INSTALL=""
 
 cleanup() {

@@ -4,7 +4,7 @@ $App = if ($env:APP) { $env:APP } else { "csgclaw" }
 $Repo = if ($env:REPO) { $env:REPO } else { "OpenCSGs/csgclaw" }
 $Version = if ($env:VERSION) { $env:VERSION } else { "latest" }
 $InstallDir = if ($env:INSTALL_DIR) { $env:INSTALL_DIR } else { Join-Path $HOME "AppData\Local\Programs\csgclaw\bin" }
-$BaseUrl = if ($env:BASE_URL) { $env:BASE_URL } else { "https://github.com/$Repo/releases/download" }
+$BaseUrl = if ($env:BASE_URL) { $env:BASE_URL } else { "https://csgclaw.opencsg.com/releases" }
 
 function Resolve-Arch {
     switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()) {
