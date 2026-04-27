@@ -275,19 +275,6 @@ Behavior:
 - `--output json` is supported only for non-follow mode.
 - `--output json --follow` returns an error.
 
-#### `csgclaw agent status`
-
-Usage:
-
-```bash
-csgclaw agent status [id]
-```
-
-Behavior:
-
-- With an ID, returns one agent.
-- Without an ID, behaves like `agent list`.
-
 Examples:
 
 ```bash
@@ -295,8 +282,6 @@ csgclaw agent list
 csgclaw agent list --filter running
 csgclaw agent create --name alice --description "frontend worker" --profile openai.gpt-5.4-mini
 csgclaw agent start agent-alice
-csgclaw agent status
-csgclaw agent status agent-alice
 csgclaw agent stop agent-alice
 csgclaw agent logs agent-alice -n 50
 csgclaw agent logs agent-alice --follow

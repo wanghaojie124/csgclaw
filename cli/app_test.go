@@ -19,7 +19,7 @@ import (
 	appversion "csgclaw/internal/version"
 )
 
-func TestExecuteAgentStatusUsesHTTPClient(t *testing.T) {
+func TestExecuteAgentListUsesHTTPClientJSON(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	app := &App{
 		stdout: &stdout,
@@ -32,7 +32,7 @@ func TestExecuteAgentStatusUsesHTTPClient(t *testing.T) {
 		}),
 	}
 
-	err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "--output", "json", "agent", "status"})
+	err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "--output", "json", "agent", "list"})
 	if err != nil {
 		t.Fatalf("Execute() error = %v; stderr=%s", err, stderr.String())
 	}
@@ -59,7 +59,7 @@ func TestExecuteDefaultsToJSONOutputForNonTerminalStdout(t *testing.T) {
 		}),
 	}
 
-	if err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "agent", "status"}); err != nil {
+	if err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "agent", "list"}); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
 	got, err := os.ReadFile(stdout.Name())
@@ -89,7 +89,7 @@ func TestExecuteUsesEnvironmentForEndpointAndToken(t *testing.T) {
 		}),
 	}
 
-	if err := app.Execute(context.Background(), []string{"agent", "status"}); err != nil {
+	if err := app.Execute(context.Background(), []string{"agent", "list"}); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
 }
@@ -115,7 +115,7 @@ func TestExecuteFlagsOverrideEnvironmentForEndpointAndToken(t *testing.T) {
 	if err := app.Execute(context.Background(), []string{
 		"--endpoint", "http://flag.example.test",
 		"--token", "flag-secret-token",
-		"agent", "status",
+		"agent", "list",
 	}); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -803,23 +803,20 @@ func TestExecuteAgentDeleteAllRejectsID(t *testing.T) {
 	}
 }
 
-func TestExecuteAgentStatusByIDUsesHTTPClient(t *testing.T) {
-	var stdout bytes.Buffer
+func TestExecuteAgentStatusIsRejected(t *testing.T) {
 	app := &App{
-		stdout: &stdout,
-		stderr: &bytes.Buffer{},
-		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-			if req.URL.String() != "http://example.test/api/v1/agents/u-alice" {
-				t.Fatalf("url = %q, want %q", req.URL.String(), "http://example.test/api/v1/agents/u-alice")
-			}
-			return jsonResponse(http.StatusOK, `{"id":"u-alice","name":"alice","role":"worker","status":"running","created_at":"2026-04-01T12:00:00Z","profile":"codex-main"}`), nil
-		}),
+		stdout:     &bytes.Buffer{},
+		stderr:     &bytes.Buffer{},
+		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) { return nil, nil }),
 	}
 
-	if err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "agent", "status", "u-alice"}); err != nil {
-		t.Fatalf("Execute() error = %v", err)
+	err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "agent", "status", "u-alice"})
+	if err == nil {
+		t.Fatal("Execute() error = nil, want unknown subcommand")
 	}
-	assertTableHasRow(t, stdout.String(), "u-alice", "alice", "worker", "running", "codex-main")
+	if !strings.Contains(err.Error(), `unknown agent subcommand "status"`) {
+		t.Fatalf("Execute() error = %v, want unknown status subcommand", err)
+	}
 }
 
 func TestExecuteAgentLogsUsesHTTPClient(t *testing.T) {
@@ -1512,8 +1509,7 @@ func TestAgentHelpIncludesSubcommands(t *testing.T) {
 		"csgclaw agent <subcommand> [flags]",
 		"list               List agents",
 		"create             Create an agent",
-		"delete <id>        Delete an agent",
-		"status [id]        Show one agent or list all agents",
+		"delete <id>        Delete one agent",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("help = %q, want substring %q", got, want)
@@ -1660,48 +1656,6 @@ func TestRunStopRejectsInvalidPIDFile(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "parse pid file") {
 		t.Fatalf("Execute() error = %q, want parse pid file", err)
-	}
-}
-
-func TestExecuteAgentStatusErrorOmitsHTTPStatusCode(t *testing.T) {
-	app := &App{
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
-		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-			return jsonResponse(http.StatusNotFound, "agent not found\n"), nil
-		}),
-	}
-
-	err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "agent", "status", "missing"})
-	if err == nil {
-		t.Fatal("Execute() error = nil, want error")
-	}
-	if err.Error() != "agent not found" {
-		t.Fatalf("Execute() error = %q, want %q", err.Error(), "agent not found")
-	}
-	if strings.Contains(strings.ToLower(err.Error()), "http") || strings.Contains(err.Error(), "404") {
-		t.Fatalf("Execute() error = %q, should not include HTTP status details", err.Error())
-	}
-}
-
-func TestExecuteAgentStatusErrorUsesJSONMessageWithoutHTTPStatusCode(t *testing.T) {
-	app := &App{
-		stdout: &bytes.Buffer{},
-		stderr: &bytes.Buffer{},
-		httpClient: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-			return jsonResponse(http.StatusBadRequest, `{"error":"invalid agent id"}`), nil
-		}),
-	}
-
-	err := app.Execute(context.Background(), []string{"--endpoint", "http://example.test", "agent", "status", "bad/id"})
-	if err == nil {
-		t.Fatal("Execute() error = nil, want error")
-	}
-	if err.Error() != "invalid agent id" {
-		t.Fatalf("Execute() error = %q, want %q", err.Error(), "invalid agent id")
-	}
-	if strings.Contains(strings.ToLower(err.Error()), "http") || strings.Contains(err.Error(), "400") {
-		t.Fatalf("Execute() error = %q, should not include HTTP status details", err.Error())
 	}
 }
 

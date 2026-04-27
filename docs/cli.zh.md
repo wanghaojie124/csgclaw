@@ -275,19 +275,6 @@ csgclaw agent logs <id> [-f|--follow] [-n lines]
 - 只有非 follow 模式支持 `--output json`。
 - `--output json --follow` 会直接报错。
 
-#### `csgclaw agent status`
-
-用法：
-
-```bash
-csgclaw agent status [id]
-```
-
-行为说明：
-
-- 传入 ID 时返回单个 Agent。
-- 不传 ID 时，行为等同于 `agent list`。
-
 示例：
 
 ```bash
@@ -295,8 +282,6 @@ csgclaw agent list
 csgclaw agent list --filter running
 csgclaw agent create --name alice --description "frontend worker" --profile openai.gpt-5.4-mini
 csgclaw agent start agent-alice
-csgclaw agent status
-csgclaw agent status agent-alice
 csgclaw agent stop agent-alice
 csgclaw agent logs agent-alice -n 50
 csgclaw agent logs agent-alice --follow

@@ -54,8 +54,6 @@ func (c cmd) Run(ctx context.Context, run *command.Context, args []string, globa
 		return c.runDelete(ctx, run, args[1:], globals)
 	case "logs":
 		return c.runLogs(ctx, run, args[1:], globals)
-	case "status":
-		return c.runStatus(ctx, run, args[1:], globals)
 	default:
 		c.usage(run)
 		return fmt.Errorf("unknown agent subcommand %q", args[0])
@@ -71,7 +69,6 @@ func (c cmd) usage(run *command.Context) {
 		"delete <id>        Delete one agent",
 		"delete --all       Delete all agents",
 		"logs <id>          Show agent logs",
-		"status [id]        Show one agent or list all agents",
 	})
 }
 
@@ -290,42 +287,12 @@ func (c cmd) runLogs(ctx context.Context, run *command.Context, args []string, g
 	return run.APIClient(globals).Stream(ctx, "/api/v1/agents/"+rest[0]+"/logs", values, run.Stdout)
 }
 
-func (c cmd) runStatus(ctx context.Context, run *command.Context, args []string, globals command.GlobalOptions) error {
-	fs := run.NewFlagSet("agent status", run.Program+" agent status [id] [flags]", "Show one agent or list all agents.")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-
-	rest := fs.Args()
-	if len(rest) > 1 {
-		return fmt.Errorf("agent status accepts at most one id")
-	}
-
-	if len(rest) == 1 {
-		got, err := getAgent(ctx, run.APIClient(globals), rest[0])
-		if err != nil {
-			return err
-		}
-		return command.RenderAgents(globals.Output, run.Stdout, []apitypes.Agent{got})
-	}
-
-	return c.runList(ctx, run, args, globals)
-}
-
 func listAgents(ctx context.Context, client *apiclient.Client) ([]apitypes.Agent, error) {
 	var agents []apitypes.Agent
 	if err := client.GetJSON(ctx, "/api/v1/agents", &agents); err != nil {
 		return nil, err
 	}
 	return agents, nil
-}
-
-func getAgent(ctx context.Context, client *apiclient.Client, id string) (apitypes.Agent, error) {
-	var got apitypes.Agent
-	if err := client.GetJSON(ctx, "/api/v1/agents/"+id, &got); err != nil {
-		return apitypes.Agent{}, err
-	}
-	return got, nil
 }
 
 func createAgent(ctx context.Context, client *apiclient.Client, req apitypes.CreateAgentRequest) (apitypes.Agent, error) {
