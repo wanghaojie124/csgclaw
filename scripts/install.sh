@@ -141,7 +141,10 @@ main() {
 Installed ${APP} ${version} to ${extracted_path}
 
 Next steps:
-  ${APP} onboard --base-url <url> --api-key <key> --model-id <model>
+  Choose one:
+    ${APP} onboard --provider csghub-lite --models <model>
+  or:
+    ${APP} onboard --base-url <url> --api-key <key> --models <model>
   ${APP} serve
 EOF
   check_path_hint
