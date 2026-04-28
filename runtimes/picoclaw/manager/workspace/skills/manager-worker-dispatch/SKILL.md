@@ -13,6 +13,19 @@ Check the current CLI surface through the `basics` skill instead of writing ad h
 
 If the user only needs a direct CLI action and there is no real dispatch workflow, use the `basics` skill instead of this skill.
 
+## Mandatory Dispatch Order
+
+When a user asks for manager-led coordination (especially GitLab planning, issue queries, breakdown, assignment, or execution handoff), follow this order and do not skip steps:
+
+1. Read this skill first before any domain execution.
+2. Check existing workers first (`bot list`) and prefer reusing a capable available worker.
+3. Ensure the selected worker is a member of the target room (add if missing).
+4. If no suitable worker exists or the matching one is `unavailable`, create or recreate the worker first, then add to the room.
+5. Dispatch the task to the worker in-room after membership is confirmed.
+
+Do not start with repo/code exploration, web fetch/search, or manager self-execution when the task is delegable to an existing or creatable worker.
+Do not skip `bot list` by assuming worker availability from memory or prior turns.
+
 ## Fast Path
 
 If the admin explicitly asks the manager to arrange or reuse workers such as `ux`, `dev`, and `qa`, do this directly:
@@ -24,7 +37,8 @@ If the admin explicitly asks the manager to arrange or reuse workers such as `ux
 5. Use the `basics` skill to ensure every chosen worker has joined the target room and verify room membership.
 6. Only after all required workers are present in the room, write `todo.json` under `~/.picoclaw/workspace/projects/<slug>/todo.json`.
 7. Only after that room-membership check passes, start tracking with `scripts/manager_worker_api.py start-tracking`.
-8. Send at most one concise final room reply after tracking starts successfully.
+8. Verify the first tracker dispatch message is actually delivered in-room (must include a real mention, i.e. `mention_id` targeting the assignee user; rendered as `<at user_id="...">...</at>` in message content).
+9. Send at most one concise final room reply after dispatch delivery is verified.
 
 If you already know this workflow and the relevant command surface is clear, do not reread this file just to paraphrase it back to the user.
 Do not inspect or modify project implementation files before dispatch unless you need to choose the project slug or update `todo.json`.
@@ -32,12 +46,15 @@ Do not inspect or modify project implementation files before dispatch unless you
 ## Workflow
 
 1. Break the admin request into concrete deliverables.
-2. Match each task to the needed capability; use the `basics` skill to inspect existing workers first, reuse by matching `description`, and create a worker only when needed or when the matching worker is `unavailable`.
-3. Use the `basics` skill to ensure every required worker has joined the target room, then verify the full required worker set.
-4. Choose a suitable project directory under `~/.picoclaw/workspace/projects`; create a short slug directory if none fits.
-5. Write or overwrite `todo.json` in that directory as the only source of truth for the current dispatch plan, but only after the room-membership verification succeeds.
-6. Start `scripts/manager_worker_api.py start-tracking` against that `todo.json`, but only after all required workers are confirmed present in the room.
-7. Let the tracker own sequential handoff; workers must reply in-room with results or blockers, and neither the manager nor workers should manually assign the next worker while tracking is active.
+2. Match each task to the needed capability; use the `basics` skill to inspect existing workers first (`bot list`) and reuse by matching `description`.
+3. If a suitable worker does not exist or is `unavailable`, create or recreate it before dispatch.
+4. Use the `basics` skill to ensure every required worker has joined the target room, then verify the full required worker set.
+5. Dispatch the user task to selected workers in-room after membership checks pass.
+6. Choose a suitable project directory under `~/.picoclaw/workspace/projects`; create a short slug directory if none fits.
+7. Write or overwrite `todo.json` in that directory as the only source of truth for the current dispatch plan, but only after the room-membership verification succeeds.
+8. Start `scripts/manager_worker_api.py start-tracking` against that `todo.json`, but only after all required workers are confirmed present in the room.
+9. Let the tracker own sequential handoff; workers must reply in-room with results or blockers, and neither the manager nor workers should manually assign the next worker while tracking is active.
+10. After `start-tracking`, run an explicit dispatch-delivery check before claiming success: query recent room messages and confirm the tracker/bot has posted a task message with a real mention (`mention_id` targeting the assignee user; rendered as `<at user_id="...">...</at>`).
 
 ## Room Membership Gate
 
@@ -153,6 +170,25 @@ Start tracking todo:
 python scripts/manager_worker_api.py start-tracking --channel <current_channel> --room-id room-123 --todo-path ~/.picoclaw/workspace/projects/demo/todo.json
 ```
 
+Dispatch delivery verification (mandatory, immediately after start):
+
+```bash
+csgclaw-cli message list --room-id <target_room_id> --channel <current_channel> --output json
+```
+
+Success criteria:
+
+- There is a new tracker dispatch message from the manager bot in the target room.
+- The dispatch message includes mention to the selected assignee (`mention_id` equals the worker user id). Do **not** rely on plain-text `@name`; CSGClaw renders mentions as `<at user_id="...">Name</at>`.
+- Message content matches the task dispatch text pattern (task id/todo path context).
+
+If verification does not pass:
+
+1. Wait briefly and re-check message list up to 3 times.
+2. If still missing, report dispatch failure with evidence.
+3. Do **not** send a manual fallback assignment message while tracking is active.
+4. Stop tracking if needed, fix root cause (assignee handle mismatch, room membership mismatch, bot id mismatch), then restart tracking.
+
 Stop the tracking:
 
 ```bash
@@ -170,6 +206,7 @@ If you need to direct the human user to the project files on their Mac, point th
 - Keep `todo.json` aligned with the actual assignment being dispatched.
 - Do not casually reorder tasks in the sequential flow.
 - Let `start-tracking` drive dispatch from `todo.json`; do not duplicate that logic in manual room-message procedures.
+- Never "补发" assignment messages manually after `start-tracking`; treat missing mention/`mention_id` dispatch as a verification failure to debug, not a prompt for manual dispatch.
 - While tracking is active, do not manually tell the next worker to start in prose. The tracker is the only sequencer.
 - When a worker finishes, they must reply in the shared room with a normal summary or blocker note; updating `todo.json` alone does not release the next task.
 - Route all non-tracking room, bot, and member operations through the `basics` skill; do not use `scripts/manager_worker_api.py` for those operations.

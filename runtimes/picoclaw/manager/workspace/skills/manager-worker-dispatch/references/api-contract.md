@@ -45,7 +45,7 @@ When available, load the CSGClaw API settings from `~/.picoclaw/config.json`:
 ```json
 {
   "room_id": "room-123",
-  "text": "@bob 你来写前端代码，实现设置页 UI"
+  "text": "<at user_id=\"u-bob\">bob</at> 你来写前端代码，实现设置页 UI"
 }
 ```
 

@@ -95,6 +95,7 @@ func (c serveCmd) Run(ctx context.Context, run *command.Context, args []string, 
 	if err != nil {
 		return err
 	}
+	enforceDefaultManagerImage(&cfg)
 	if err := validateModelConfig(cfg); err != nil {
 		return err
 	}
@@ -199,6 +200,7 @@ func (c internalServeCmd) Run(ctx context.Context, run *command.Context, args []
 	if err != nil {
 		return err
 	}
+	enforceDefaultManagerImage(&cfg)
 	if err := validateModelConfig(cfg); err != nil {
 		return err
 	}
@@ -236,6 +238,7 @@ func (c internalServeCmd) Run(ctx context.Context, run *command.Context, args []
 }
 
 func serveForeground(ctx context.Context, run *command.Context, cfg config.Config, output string) error {
+	enforceDefaultManagerImage(&cfg)
 	if err := preflightDefaultModelProvider(ctx, cfg); err != nil {
 		return err
 	}
@@ -614,6 +617,15 @@ func validateModelConfig(cfg config.Config) error {
 		return fmt.Errorf("models config is invalid: %w", err)
 	}
 	return nil
+}
+
+func enforceDefaultManagerImage(cfg *config.Config) {
+	if cfg == nil {
+		return
+	}
+	if strings.TrimSpace(cfg.Bootstrap.ManagerImage) != strings.TrimSpace(config.DefaultManagerImage) {
+		cfg.Bootstrap.ManagerImage = config.DefaultManagerImage
+	}
 }
 
 func missingModelFlags(fields []string) []string {

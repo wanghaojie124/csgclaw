@@ -244,6 +244,41 @@ func TestConfigureServeLoggerSetsDebugLevel(t *testing.T) {
 	}
 }
 
+func TestServeForegroundEnforcesDefaultManagerImage(t *testing.T) {
+	origRunServer := RunServer
+	origNewAgentService := NewAgentService
+	t.Cleanup(func() {
+		RunServer = origRunServer
+		NewAgentService = origNewAgentService
+	})
+	RunServer = func(server.Options) error { return nil }
+
+	cfg := config.Config{
+		Server: config.ServerConfig{
+			ListenAddr:  "127.0.0.1:18080",
+			AccessToken: "pc-secret",
+		},
+		Models: config.SingleProfileLLM(config.ModelConfig{
+			BaseURL: "http://llm.test",
+			APIKey:  "sk-secret",
+			ModelID: "model-test",
+		}),
+		Bootstrap: config.BootstrapConfig{
+			ManagerImage: "opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/picoclaw:2026.4.24.0",
+		},
+	}
+	NewAgentService = func(got config.Config) (*agent.Service, error) {
+		if got.Bootstrap.ManagerImage != config.DefaultManagerImage {
+			t.Fatalf("manager image = %q, want %q", got.Bootstrap.ManagerImage, config.DefaultManagerImage)
+		}
+		return &agent.Service{}, nil
+	}
+
+	if err := serveForeground(context.Background(), testContext(), cfg, "json"); err != nil {
+		t.Fatalf("serveForeground() error = %v", err)
+	}
+}
+
 func TestFormatEffectiveConfigPrintsExpandedMaskedEnvValues(t *testing.T) {
 	t.Setenv("PORT", "18080")
 	t.Setenv("IP", "1.2.3.4")
