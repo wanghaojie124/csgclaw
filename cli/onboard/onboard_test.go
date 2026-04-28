@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -111,6 +112,59 @@ func TestSandboxServiceOptionsSupportsConfiguredProvider(t *testing.T) {
 	}
 	if len(opts) != 2 {
 		t.Fatalf("len(opts) = %d, want 2", len(opts))
+	}
+}
+
+func TestConfigureOnboardLoggerRejectsUnsupportedLevel(t *testing.T) {
+	_, err := configureOnboardLogger(&bytes.Buffer{}, "trace")
+	if err == nil {
+		t.Fatal("configureOnboardLogger() error = nil, want unsupported-level error")
+	}
+	if !strings.Contains(err.Error(), `unsupported log level "trace"`) {
+		t.Fatalf("configureOnboardLogger() error = %q, want unsupported-level error", err)
+	}
+}
+
+func TestConfigureOnboardLoggerEnablesDebug(t *testing.T) {
+	prev := slog.Default()
+	t.Cleanup(func() {
+		slog.SetDefault(prev)
+	})
+
+	restore, err := configureOnboardLogger(&bytes.Buffer{}, "debug")
+	if err != nil {
+		t.Fatalf("configureOnboardLogger() error = %v", err)
+	}
+	defer restore()
+
+	if !slog.Default().Enabled(context.Background(), slog.LevelDebug) {
+		t.Fatal("default logger debug level is disabled, want enabled")
+	}
+}
+
+func TestConfigureOnboardLoggerUsesCompactTerminalFormat(t *testing.T) {
+	prev := slog.Default()
+	origTerminal := isTerminalFD
+	t.Cleanup(func() {
+		slog.SetDefault(prev)
+		isTerminalFD = origTerminal
+	})
+	isTerminalFD = func(int) bool { return true }
+
+	buf := &fakeTerminalBuffer{}
+	restore, err := configureOnboardLogger(buf, "debug")
+	if err != nil {
+		t.Fatalf("configureOnboardLogger() error = %v", err)
+	}
+	defer restore()
+
+	slog.Debug("running boxlite cli command: /tmp/boxlite inspect --format json manager")
+	got := buf.String()
+	if !strings.Contains(got, "DEBUG running boxlite cli command: /tmp/boxlite inspect --format json manager") {
+		t.Fatalf("terminal log = %q, want compact debug format", got)
+	}
+	if strings.Contains(got, "level=DEBUG") || strings.Contains(got, "msg=") || strings.Contains(got, "time=") {
+		t.Fatalf("terminal log = %q, want no default text-handler fields", got)
 	}
 }
 
