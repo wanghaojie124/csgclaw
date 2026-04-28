@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -73,6 +75,7 @@ func (c serveCmd) Run(ctx context.Context, run *command.Context, args []string, 
 	fs := run.NewFlagSet("serve", run.Program+" serve [-d|--daemon] [flags]", c.Summary())
 	daemon := fs.Bool("daemon", false, "run server in background")
 	fs.BoolVar(daemon, "d", false, "run server in background")
+	logLevel := fs.String("log-level", "info", "log level: debug, info, warn, error")
 
 	defaultLogPath, err := defaultServerLogPath()
 	if err != nil {
@@ -100,8 +103,13 @@ func (c serveCmd) Run(ctx context.Context, run *command.Context, args []string, 
 	}
 
 	if *daemon {
-		return serveBackground(run, cfg, globals, *logPath, *pidPath)
+		return serveBackground(run, cfg, globals, *logPath, *pidPath, *logLevel)
 	}
+	restore, err := configureServeLogger(run.Stderr, *logLevel)
+	if err != nil {
+		return err
+	}
+	defer restore()
 	return serveForeground(ctx, run, cfg, globals.Output)
 }
 
@@ -172,6 +180,7 @@ func (c internalServeCmd) Run(ctx context.Context, run *command.Context, args []
 	fs := run.NewFlagSet("_serve", run.Program+" _serve [flags]", c.Summary())
 	pidPath := fs.String("pid", "", "pid file path")
 	configPathFlag := fs.String("config", globals.Config, "config file path")
+	logLevel := fs.String("log-level", "info", "log level: debug, info, warn, error")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -196,6 +205,11 @@ func (c internalServeCmd) Run(ctx context.Context, run *command.Context, args []
 	if globals.Endpoint != "" {
 		cfg.Server.AdvertiseBaseURL = strings.TrimRight(globals.Endpoint, "/")
 	}
+	restore, err := configureServeLogger(run.Stderr, *logLevel)
+	if err != nil {
+		return err
+	}
+	defer restore()
 	if err := preflightDefaultModelProvider(ctx, cfg); err != nil {
 		return err
 	}
@@ -265,7 +279,7 @@ func serveForeground(ctx context.Context, run *command.Context, cfg config.Confi
 	return startServer(ctx, cfg, svc, botSvc, imSvc, imBus, feishuSvc)
 }
 
-func serveBackground(run *command.Context, cfg config.Config, globals command.GlobalOptions, logPath, pidPath string) error {
+func serveBackground(run *command.Context, cfg config.Config, globals command.GlobalOptions, logPath, pidPath, logLevel string) error {
 	exe, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("resolve executable: %w", err)
@@ -282,6 +296,9 @@ func serveBackground(run *command.Context, cfg config.Config, globals command.Gl
 	childArgs := []string{"_serve", "--pid", pidPath}
 	if globals.Config != "" {
 		childArgs = append(childArgs, "--config", globals.Config)
+	}
+	if strings.TrimSpace(logLevel) != "" {
+		childArgs = append(childArgs, "--log-level", logLevel)
 	}
 	cmd := exec.Command(exe, childArgs...)
 	cmd.Stdout = logFile
@@ -318,6 +335,38 @@ func serveBackground(run *command.Context, cfg config.Config, globals command.Gl
 	fmt.Fprintf(run.Stdout, "log: %s\n", result.LogPath)
 	fmt.Fprintf(run.Stdout, "pid: %s\n", result.PIDPath)
 	return nil
+}
+
+func configureServeLogger(w io.Writer, level string) (func(), error) {
+	parsedLevel, err := parseServeLogLevel(level)
+	if err != nil {
+		return nil, err
+	}
+	if w == nil {
+		w = os.Stderr
+	}
+
+	prev := slog.Default()
+	logger := slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: parsedLevel}))
+	slog.SetDefault(logger)
+	return func() {
+		slog.SetDefault(prev)
+	}, nil
+}
+
+func parseServeLogLevel(level string) (slog.Level, error) {
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "", "info":
+		return slog.LevelInfo, nil
+	case "debug":
+		return slog.LevelDebug, nil
+	case "warn", "warning":
+		return slog.LevelWarn, nil
+	case "error":
+		return slog.LevelError, nil
+	default:
+		return 0, fmt.Errorf("unsupported log level %q", level)
+	}
 }
 
 func startServer(ctx context.Context, cfg config.Config, svc *agent.Service, botSvc *bot.Service, imSvc *im.Service, imBus *im.Bus, feishuSvc *channel.FeishuService) error {

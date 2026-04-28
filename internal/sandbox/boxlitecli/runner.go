@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os/exec"
 )
 
@@ -37,6 +38,7 @@ func (execRunner) Run(ctx context.Context, req CommandRequest) (CommandResult, e
 	if len(req.Env) > 0 {
 		cmd.Env = append(cmd.Environ(), req.Env...)
 	}
+	slog.DebugContext(ctx, fmt.Sprintf("running boxlite cli command: %s", cmd.String()))
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

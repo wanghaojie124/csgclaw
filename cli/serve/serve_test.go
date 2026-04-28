@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -213,6 +214,33 @@ func TestServeForegroundPassesContextToServer(t *testing.T) {
 	}
 	if strings.Contains(got, "manager-secret") {
 		t.Fatalf("stdout leaked feishu app secret:\n%s", got)
+	}
+}
+
+func TestConfigureServeLoggerRejectsUnsupportedLevel(t *testing.T) {
+	_, err := configureServeLogger(&bytes.Buffer{}, "trace")
+	if err == nil {
+		t.Fatal("configureServeLogger() error = nil, want unsupported-level error")
+	}
+	if !strings.Contains(err.Error(), `unsupported log level "trace"`) {
+		t.Fatalf("configureServeLogger() error = %q, want unsupported-level error", err)
+	}
+}
+
+func TestConfigureServeLoggerSetsDebugLevel(t *testing.T) {
+	prev := slog.Default()
+	t.Cleanup(func() {
+		slog.SetDefault(prev)
+	})
+
+	restore, err := configureServeLogger(&bytes.Buffer{}, "debug")
+	if err != nil {
+		t.Fatalf("configureServeLogger() error = %v", err)
+	}
+	defer restore()
+
+	if !slog.Default().Enabled(context.Background(), slog.LevelDebug) {
+		t.Fatal("default logger debug level is disabled, want enabled")
 	}
 }
 
@@ -456,6 +484,27 @@ func TestAPIBaseURLFallsBackToSharedDefault(t *testing.T) {
 	got := apiBaseURL(config.ServerConfig{})
 	if got != config.DefaultAPIBaseURL() {
 		t.Fatalf("apiBaseURL() = %q, want %q", got, config.DefaultAPIBaseURL())
+	}
+}
+
+func TestParseServeLogLevel(t *testing.T) {
+	cases := map[string]slog.Level{
+		"":        slog.LevelInfo,
+		"info":    slog.LevelInfo,
+		"DEBUG":   slog.LevelDebug,
+		"warn":    slog.LevelWarn,
+		"warning": slog.LevelWarn,
+		"error":   slog.LevelError,
+	}
+
+	for input, want := range cases {
+		got, err := parseServeLogLevel(input)
+		if err != nil {
+			t.Fatalf("parseServeLogLevel(%q) error = %v", input, err)
+		}
+		if got != want {
+			t.Fatalf("parseServeLogLevel(%q) = %v, want %v", input, got, want)
+		}
 	}
 }
 
