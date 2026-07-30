@@ -400,15 +400,51 @@ func messageEventForParticipant(room Room, sender User, message Message, partici
 func textForParticipantEvent(message Message, participantID string) string {
 	content := message.Content
 	userID := userIDForParticipantID(participantID)
-	if content == "" || userID == "" || HasMentionTagForUser(content, userID) {
-		return content
-	}
-	for _, mention := range message.Mentions {
-		if canonicalIMUserID(mention.ID) == userID {
-			return replaceMentionNameWithTag(content, mentionForUserID(mention, userID))
+	if content != "" && userID != "" && !HasMentionTagForUser(content, userID) {
+		for _, mention := range message.Mentions {
+			if canonicalIMUserID(mention.ID) == userID {
+				content = replaceMentionNameWithTag(content, mentionForUserID(mention, userID))
+				break
+			}
 		}
 	}
-	return content
+	return appendParticipantAttachmentContext(content, message.Attachments)
+}
+
+func appendParticipantAttachmentContext(content string, attachments []MessageAttachment) string {
+	if len(attachments) == 0 {
+		return content
+	}
+	type attachmentContext struct {
+		Name          string `json:"name"`
+		MediaType     string `json:"media_type,omitempty"`
+		SizeBytes     int64  `json:"size_bytes,omitempty"`
+		WorkspacePath string `json:"workspace_path,omitempty"`
+		DownloadURL   string `json:"download_url,omitempty"`
+	}
+	items := make([]attachmentContext, 0, len(attachments))
+	for _, attachment := range attachments {
+		items = append(items, attachmentContext{
+			Name:          attachment.Name,
+			MediaType:     attachment.MediaType,
+			SizeBytes:     attachment.SizeBytes,
+			WorkspacePath: attachment.WorkspacePath,
+			DownloadURL:   attachment.DownloadURL,
+		})
+	}
+	data, err := json.Marshal(items)
+	if err != nil {
+		return content
+	}
+	context := strings.Join([]string{
+		"[CSGClaw attachment context]",
+		"The user attached the following files. Paths are relative to the agent workspace. Inspect relevant files before responding.",
+		string(data),
+	}, "\n")
+	if strings.TrimSpace(content) == "" {
+		return context
+	}
+	return strings.TrimRight(content, "\n") + "\n\n" + context
 }
 
 func participantActionTextForEvent(message Message, participantID, text string) string {

@@ -1,6 +1,7 @@
 package im
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -262,6 +263,17 @@ func TestPublishMessageEventIncludesAttachments(t *testing.T) {
 		if len(evt.Attachments) != 1 || evt.Attachments[0].ID != "att-2" {
 			t.Fatalf("Attachments = %+v, want reply attachment", evt.Attachments)
 		}
+		for _, want := range []string{
+			"[CSGClaw attachment context]",
+			`"name":"notes.txt"`,
+			`"media_type":"text/plain"`,
+			`"size_bytes":12`,
+			`"download_url":"/api/v1/attachments/att-2"`,
+		} {
+			if !strings.Contains(evt.Text, want) {
+				t.Fatalf("Text = %q, want attachment context containing %q", evt.Text, want)
+			}
+		}
 		if evt.ThreadContext == nil || len(evt.ThreadContext.Context) != 1 {
 			t.Fatalf("ThreadContext = %+v, want root context", evt.ThreadContext)
 		}
@@ -270,6 +282,31 @@ func TestPublishMessageEventIncludesAttachments(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("PublishMessageEvent() timed out waiting for event")
+	}
+}
+
+func TestTextForParticipantEventIncludesWorkspaceAttachmentPath(t *testing.T) {
+	message := Message{
+		Content: "analyze this resume",
+		Attachments: []MessageAttachment{{
+			Name:          "resume.pdf",
+			MediaType:     "application/pdf",
+			SizeBytes:     239800,
+			WorkspacePath: ".csgclaw/attachments/room-1/msg-1/resume.pdf",
+			DownloadURL:   "/api/v1/attachments/att-resume",
+		}},
+	}
+
+	got := textForParticipantEvent(message, "u-resume-scorer")
+	for _, want := range []string{
+		"analyze this resume",
+		"[CSGClaw attachment context]",
+		`"name":"resume.pdf"`,
+		`"workspace_path":".csgclaw/attachments/room-1/msg-1/resume.pdf"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("textForParticipantEvent() = %q, want %q", got, want)
+		}
 	}
 }
 
