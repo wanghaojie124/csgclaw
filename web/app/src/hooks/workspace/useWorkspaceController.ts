@@ -1,3 +1,4 @@
+import { hasPendingCloudTask } from "@/models/cloudTasks";
 import { pathForNewAgentTask, pathForNewTeamTask } from "@/models/routing";
 import { bindAgentViews } from "./bindings/agent";
 import {
@@ -37,6 +38,7 @@ import { useUpgradeController } from "./useUpgradeController";
 import { useConfigController } from "./useConfigController";
 import { useAuthController } from "./useAuthController";
 import { useOpenCSGAuthGuard } from "./useOpenCSGAuthGuard";
+import { confirmWithFocusRecovery } from "@/shared/platform/confirm";
 import { useAgentController } from "./useAgentController";
 import { useConversationController } from "./useConversationController";
 import { useProfilePreviewController } from "./useProfilePreviewController";
@@ -304,7 +306,7 @@ export function useWorkspaceController(): WorkspaceController {
       if (
         !options.skipUnsavedCheck &&
         agent.agentViewProps.hasUnsavedChanges &&
-        !window.confirm(t("agentUnsavedChangesWarning"))
+        !confirmWithFocusRecovery(t("agentUnsavedChangesWarning"))
       ) {
         return false;
       }
@@ -815,7 +817,9 @@ export function useWorkspaceController(): WorkspaceController {
       if (activePane.type === WorkspacePaneTypes.conversation && activePane.id === id) navigate("/new");
     },
     onOpen: (room) => selectConversation(room.id, { rooms: [room] }),
-    isWorking: (id) => participantWork.workingParticipantsForRoom(id).length > 0,
+    isWorking: (id) =>
+      participantWork.workingParticipantsForRoom(id).length > 0 ||
+      hasPendingCloudTask(rooms.find((room) => room.id === id)),
   });
 
   if (!displayData) {

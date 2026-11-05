@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRelayPublication } from "./useRelayPublication";
 import { useAgentResourceLists } from "./useAgentResourceLists";
 import { useAgentResourceEnablement } from "./useAgentResourceEnablement";
 import { useBlocker } from "react-router-dom";
+import { confirmWithFocusRecovery } from "@/shared/platform/confirm";
 import { apiErrorBillingURL, apiErrorCode, errorMessage as apiErrorMessage } from "@/api/client";
 import { loginCLIProxyProviderRequest } from "@/api/cliproxy";
 import {
@@ -669,6 +671,7 @@ export function useAgentController({
     }
     return agentItems.find((item) => item.id === selectedAgentID) ?? null;
   }, [agentItems, activePane.id, activePane.type, profileDetailAgentID]);
+  const relayPublication = useRelayPublication(String(selectedAgentForPage?.id || ""));
   const selectedAgentForPageDraftSignature = useMemo(() => {
     if (!selectedAgentForPage) {
       return "";
@@ -1110,7 +1113,7 @@ export function useAgentController({
       return;
     }
     agentPageNavigationConfirmedRef.current = true;
-    if (window.confirm(t("agentUnsavedChangesWarning"))) {
+    if (confirmWithFocusRecovery(t("agentUnsavedChangesWarning"))) {
       setAgentPageDraft(agentPageSavedDraft);
       setAgentPageSaveError("");
       agentPageNavigationBlocker.proceed();
@@ -2474,7 +2477,7 @@ export function useAgentController({
     if (!item?.id || isAgentActionBusy(item.id)) {
       return false;
     }
-    if (!window.confirm(`${t("agentDelete")} ${item.name}?`)) {
+    if (!confirmWithFocusRecovery(`${t("agentDelete")} ${item.name}?`)) {
       return false;
     }
     const busyKey = `${item.id}:delete-bot`;
@@ -2869,6 +2872,7 @@ export function useAgentController({
       linkedTemplate: hubTemplates.find(
         (template) => template.source?.kind === "local" && template.source_agent_id === selectedAgentForPage?.id,
       ),
+      relayPublication,
       item: selectedAgentForPage,
       t,
       locale,

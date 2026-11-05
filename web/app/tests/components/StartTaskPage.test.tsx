@@ -8,9 +8,12 @@ import { sendMessageRequest } from "@/api/im";
 import { StartTaskPage } from "@/pages/StartTaskPage/StartTaskPage";
 import type { IMConversation, LocaleCode } from "@/models/conversations";
 import { createTranslator } from "@/shared/i18n";
-import { TASK_EXAMPLES_HIDDEN_STORAGE_KEY } from "@/shared/storage/keys";
+import { fetchRelayCatalog } from "@/api/relay";
+import { cloudAgentFixture } from "../helpers/cloudAgentFixture";
+import { CLOUD_AGENTS_STORAGE_KEY, TASK_EXAMPLES_HIDDEN_STORAGE_KEY } from "@/shared/storage/keys";
 
 vi.mock("@/api/agentResources", () => ({ fetchConversationResourceBatch: vi.fn() }));
+vi.mock("@/api/relay", () => ({ fetchRelayCatalog: vi.fn().mockResolvedValue([]) }));
 vi.mock("@/api/im", () => ({ sendMessageRequest: vi.fn() }));
 const room: IMConversation = {
   id: "task-1",
@@ -37,6 +40,7 @@ function setup(
     configuration?: { model_provider_id?: string; model_id?: string; workspace_dir?: string };
     managerDirectory?: string;
     locale?: LocaleCode;
+    workerName?: string;
   } = {},
 ) {
   const create = vi.fn().mockResolvedValue(room);
@@ -67,7 +71,14 @@ function setup(
           runtime_kind: "codex",
           runtime_options: { local_workspace_dir: options.managerDirectory },
         },
-        { id: "u-worker", name: "Worker", user_id: "worker", model_id: model, model_provider_id: options.provider },
+        {
+          id: "u-worker",
+          name: options.workerName || "Worker",
+          user_id: "worker",
+          model_id: model,
+          model_provider_id: options.provider,
+        },
+        { id: "u-outsider", name: "Outside team", user_id: "outsider", model_id: model },
       ],
       teams: [{ id: "team-1", title: "Team", lead_agent_id: "u-manager", member_agent_ids: ["u-worker"] }],
       onCreateAgent,
@@ -346,6 +357,71 @@ describe("StartTaskPage task preparation", () => {
   });
 });
 
+describe("new task member mentions", () => {
+  beforeEach(() =>
+    vi
+      .mocked(sendMessageRequest)
+      .mockReset()
+      .mockResolvedValue({} as never),
+  );
+
+  it("selects a team member without submitting and sends a structured participant reference", async () => {
+    const user = userEvent.setup();
+    const { create, open } = setup("/new?team=team-1", "test-model", { workerName: "测试工程师 Linda" });
+    const editor = screen.getByRole("textbox", { name: "taskEntryPrompt" });
+    await user.type(editor, "请 @");
+    expect(screen.getByRole("option", { name: /Manager/ })).toBeVisible();
+    expect(screen.queryByRole("option", { name: /Outside team/ })).not.toBeInTheDocument();
+    await user.keyboard("{ArrowDown}");
+    fireEvent.select(editor);
+    await user.keyboard("{Enter}");
+    expect(editor).toHaveValue("请 @测试工程师 Linda ");
+    expect(create).not.toHaveBeenCalled();
+    expect(editor).toHaveFocus();
+    await user.type(editor, "检查代码");
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(open).toHaveBeenCalledWith(room));
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ member_ids: ["manager", "worker"] }));
+    expect(sendMessageRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: '请 <at user_id="worker">测试工程师 Linda</at> 检查代码',
+      }),
+    );
+  });
+
+  it("filters mentions, preserves a selection when text is prepended, and only offers the direct recipient", async () => {
+    const user = userEvent.setup();
+    setup("/new?agent=u-worker");
+    const editor = screen.getByRole("textbox", { name: "taskEntryPrompt" });
+    await user.type(editor, "@Wor");
+    expect(screen.getAllByRole("option")).toHaveLength(1);
+    await user.click(screen.getByRole("option", { name: /Worker/ }));
+    await user.keyboard("{Home}");
+    await user.keyboard("请 ");
+    await user.click(screen.getByRole("button", { name: "taskEntryStart" }));
+    await waitFor(() => expect(sendMessageRequest).toHaveBeenCalled());
+    expect(sendMessageRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ content: '请 <at user_id="worker">Worker</at>' }),
+    );
+  });
+
+  it("dismisses the picker with Escape and avoids selecting or sending during IME composition", async () => {
+    const user = userEvent.setup();
+    const { create } = setup("/new?team=team-1");
+    const editor = screen.getByRole("textbox", { name: "taskEntryPrompt" });
+    await user.type(editor, "@");
+    fireEvent.keyDown(editor, { key: "Enter", isComposing: true });
+    expect(editor).toHaveValue("@");
+    expect(create).not.toHaveBeenCalled();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(editor).toHaveValue("@");
+    fireEvent.compositionStart(editor);
+    fireEvent.change(editor, { target: { value: "@测", selectionStart: 2, selectionEnd: 2 } });
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+});
+
 it("StartTask 使用规范化输入检查资源组合，校验失败时不创建会话", async () => {
   vi.mocked(fetchConversationResourceBatch).mockResolvedValue({
     items: [{ source: "mcp", id: "search", type: "connector", name: "Search", enabled: true, available: true }],
@@ -480,5 +556,47 @@ describe("collaboration directory selection", () => {
     await waitFor(() => expect(open).toHaveBeenCalled());
     expect(create.mock.calls[2][0].client_request_id).not.toBe(create.mock.calls[0][0].client_request_id);
     expect(create.mock.calls[2][0].configuration).toEqual({ workspace_dir: "/shared-project" });
+  });
+});
+
+describe("cloud task targets", () => {
+  afterEach(() => {
+    localStorage.removeItem(CLOUD_AGENTS_STORAGE_KEY);
+    vi.mocked(fetchRelayCatalog).mockResolvedValue([]);
+  });
+  it("selects a summoned cloud agent and starts a task without a local model", async () => {
+    localStorage.setItem(CLOUD_AGENTS_STORAGE_KEY, JSON.stringify(cloudAgentFixture));
+    vi.mocked(fetchRelayCatalog).mockResolvedValue([...cloudAgentFixture]);
+    vi.mocked(sendMessageRequest).mockResolvedValue({} as never);
+    const { create, open, requireAuth } = setup("/new", "");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /iaTargetLabel/ }));
+    await user.click(await screen.findByRole("button", { name: /合同条款审阅/ }));
+    expect(screen.queryByText("taskEntryModelMissing")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "composerAddContent" })).toBeDisabled();
+    fireEvent.change(screen.getByRole("textbox", { name: "taskEntryPrompt" }), {
+      target: { value: "Review this contract" },
+    });
+    await user.click(screen.getByRole("button", { name: "taskEntryStart" }));
+    await waitFor(() => expect(open).toHaveBeenCalledWith(room));
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cloud_agent: { agent_id: cloudAgentFixture[0].id, connection_id: cloudAgentFixture[0].connectionID },
+        member_ids: [],
+        type: "free",
+        is_direct: true,
+        configuration: undefined,
+        manager_id: undefined,
+      }),
+    );
+    expect(requireAuth).not.toHaveBeenCalled();
+  });
+  it("keeps an offline cloud agent visible and unavailable for selection", async () => {
+    const offline = { ...cloudAgentFixture[0], status: "offline" as const };
+    localStorage.setItem(CLOUD_AGENTS_STORAGE_KEY, JSON.stringify([offline]));
+    vi.mocked(fetchRelayCatalog).mockResolvedValue([offline]);
+    setup();
+    await userEvent.click(screen.getByRole("button", { name: /iaTargetLabel/ }));
+    expect(await screen.findByRole("button", { name: /合同条款审阅/ })).toBeDisabled();
   });
 });

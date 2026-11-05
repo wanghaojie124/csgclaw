@@ -34,7 +34,8 @@ const labels: Record<string, string> = {
   taskOpenExecutionRoom: "Open execution room",
   taskOpenExecutionRoomShort: "Room",
   taskOpenConversation: "View history",
-  taskConversationAgentDeleted: "Cannot open history: the corresponding agent was deleted.",
+  taskConversationUnavailable: "Cannot open history. The execution conversation was deleted or is unavailable.",
+  taskResultLabel: "Result",
   taskParentDetailTitle: "Task detail",
   taskRoomLabel: "Room",
   taskCreate: "New task",
@@ -104,6 +105,7 @@ const labels: Record<string, string> = {
   scheduledTaskExpiresLabel: "End date (optional)",
   scheduledTaskNextRunLabel: "Next run",
   scheduledTaskLastRunLabel: "Last run",
+  scheduledTaskLatestResult: "Latest run result",
   scheduledTaskRunsTitle: "Run history",
   scheduledTaskRunsEmpty: "No runs yet.",
   scheduledTaskRunNow: "Run now",
@@ -806,36 +808,58 @@ describe("TasksView", () => {
     );
   });
 
-  it("shows a scheduled run task inline instead of opening the task dialog", () => {
+  it("previews the latest result and opens each run's detail and history on selection", () => {
     const generatedTask = task({
-      id: "task-scheduled-run-1",
+      id: "task-scheduled-run-2",
       title: "Generated report",
       body: "Generated task body",
       assignment_type: "agent",
       assignment_id: "agent-1",
-      agent_id: "agent-1",
       team_id: "",
       created_by: "scheduler",
       status: "completed",
-    } as Partial<WorkspaceTask>);
+      room_id: "room-latest",
+      result: "Build passed",
+    });
+    const olderTask = task({
+      ...generatedTask,
+      id: "task-scheduled-run-1",
+      room_id: "room-older",
+      result: "Earlier result",
+    });
+    const runs = [
+      scheduledTaskRun({ id: "scheduled-run-2", task_id: generatedTask.id, triggered_at: "2026-07-08T10:00:00" }),
+      scheduledTaskRun(),
+    ];
+    const onOpenConversation = vi.fn();
 
     render(
       <TasksView
         activeView="scheduled"
-        tasks={[generatedTask]}
+        tasks={[olderTask, generatedTask]}
         scheduledTasks={[scheduledTask()]}
-        scheduledTaskRuns={[scheduledTaskRun()]}
-        selectedScheduledTaskID="scheduled-task-1"
+        scheduledTaskRuns={runs}
+        onOpenConversation={onOpenConversation}
         t={t}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "task-scheduled-run-1" }));
+    expect(screen.queryByLabelText("Generated task detail")).not.toBeInTheDocument();
+    expect(screen.queryByText("Generated report")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Latest run result" }).parentElement).toHaveTextContent("Build passed");
 
+    fireEvent.click(screen.getByRole("button", { name: generatedTask.id }));
     expect(screen.queryByRole("dialog", { name: "Generated report" })).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Generated task detail")).toBeInTheDocument();
-    expect(screen.getByText("Generated report")).toBeInTheDocument();
+    const detail = within(screen.getByLabelText("Generated task detail"));
+    expect(detail.getByRole("heading", { name: "Result" }).parentElement).toHaveTextContent("Build passed");
     expect(screen.getByText("Generated task body")).toBeInTheDocument();
+    fireEvent.click(detail.getByRole("button", { name: "View history" }));
+    expect(onOpenConversation).toHaveBeenLastCalledWith("room-latest");
+
+    fireEvent.click(screen.getByRole("button", { name: "task-scheduled-run-1" }));
+    expect(detail.getByRole("heading", { name: "Result" }).parentElement).toHaveTextContent("Earlier result");
+    fireEvent.click(detail.getByRole("button", { name: "View history" }));
+    expect(onOpenConversation).toHaveBeenLastCalledWith("room-older");
   });
 
   it("warns instead of navigating when a scheduled run room no longer exists", () => {
@@ -846,7 +870,7 @@ describe("TasksView", () => {
       assignment_type: "agent",
       assignment_id: "agent-1",
       agent_id: "agent-1",
-      room_id: "room-deleted-agent",
+      room_id: "room-deleted",
       status: "completed",
     } as Partial<WorkspaceTask>);
 
@@ -863,13 +887,16 @@ describe("TasksView", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "task-scheduled-run-1" }));
     fireEvent.click(screen.getByRole("button", { name: "View history" }));
 
     expect(onOpenConversation).not.toHaveBeenCalled();
-    expect(screen.getByText("Cannot open history: the corresponding agent was deleted.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Cannot open history. The execution conversation was deleted or is unavailable."),
+    ).toBeInTheDocument();
   });
 
-  it("keeps the generated task detail area reserved before a run is selected", () => {
+  it("hides the generated task detail area when there are no run records", () => {
     render(
       <TasksView
         activeView="scheduled"
@@ -879,8 +906,40 @@ describe("TasksView", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Generated task detail")).toBeInTheDocument();
-    expect(screen.getByText("Select a run record to inspect the generated task.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Generated task detail")).not.toBeInTheDocument();
+    expect(screen.queryByText("Select a run record to inspect the generated task.")).not.toBeInTheDocument();
+  });
+
+  it("preserves an explicit run selection on refresh and clears it when switching schedules", () => {
+    const firstTask = task({ id: "task-scheduled-run-1", title: "First generated report" });
+    const secondTask = task({ id: "task-scheduled-run-2", title: "Second generated report" });
+    const props = {
+      activeView: "scheduled" as const,
+      tasks: [firstTask, secondTask],
+      scheduledTasks: [scheduledTask(), scheduledTask({ id: "scheduled-task-2", title: "Weekly report" })],
+      selectedScheduledTaskID: "scheduled-task-1",
+      t,
+    };
+    const { rerender } = render(<TasksView {...props} scheduledTaskRuns={[scheduledTaskRun()]} />);
+
+    rerender(<TasksView {...props} scheduledTaskRuns={[scheduledTaskRun()]} />);
+    expect(screen.queryByLabelText("Generated task detail")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: firstTask.id }));
+    const refreshedRuns = [scheduledTaskRun({ id: "scheduled-run-2", task_id: secondTask.id }), scheduledTaskRun()];
+    rerender(<TasksView {...props} scheduledTaskRuns={refreshedRuns} />);
+    expect(within(screen.getByLabelText("Generated task detail")).getByText(firstTask.title)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: firstTask.id })).toHaveAttribute("data-active", "true");
+    expect(screen.getByRole("button", { name: secondTask.id })).not.toHaveAttribute("data-active");
+
+    fireEvent.click(screen.getByRole("button", { name: secondTask.id }));
+    expect(within(screen.getByLabelText("Generated task detail")).getByText(secondTask.title)).toBeInTheDocument();
+
+    rerender(<TasksView {...props} selectedScheduledTaskID="scheduled-task-2" scheduledTaskRuns={[]} />);
+    expect(screen.queryByLabelText("Generated task detail")).not.toBeInTheDocument();
+
+    rerender(<TasksView {...props} scheduledTaskRuns={refreshedRuns} />);
+    expect(screen.queryByLabelText("Generated task detail")).not.toBeInTheDocument();
   });
 
   it("shows live status for unselected schedules without blocking the selected schedule", () => {

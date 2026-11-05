@@ -3,11 +3,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { errorMessage as apiErrorMessage } from "@/api/client";
 import { deleteHubTemplateRequest, publishHubTemplateToCommunityRequest } from "@/api/hub";
 import { deleteSkillRequest, installRemoteSkillRequest, uploadSkillArchive } from "@/api/skills";
-import { isDeletableHubTemplate, isVisibleInHubTemplateList } from "@/models/hubWorkspace";
+import { hubTemplateFullName, isDeletableHubTemplate, isVisibleInHubTemplateList } from "@/models/hubWorkspace";
 import type { HubTemplate } from "@/models/hubWorkspace";
 import { isReadonlySkill } from "@/models/skillhub";
 import type { SkillSummary } from "@/models/skillhub";
 import { localizeAPIError, localizeAPIErrorWithDiagnostics } from "@/shared/i18n";
+import { confirmWithFocusRecovery } from "@/shared/platform/confirm";
 import { workspaceQueryKeys } from "./workspaceQueries";
 import { useWorkspaceHubSelection } from "./useWorkspaceHubSelection";
 import { TemplateInstructionsDraftContext } from "@/components/business/HubDetailPane/templateInstructionsDraftStore";
@@ -225,8 +226,10 @@ export function useWorkspaceHubController({
       if (!template?.id || !isDeletableHubTemplate(template)) {
         return false;
       }
-      const label = template.name || template.id;
-      if (!window.confirm(`${t("resourcesDeleteConfirm")} ${label}?\n\n${t("resourcesDeleteLocalOnlyNotice")}`)) {
+      const label = hubTemplateFullName(template);
+      if (
+        !confirmWithFocusRecovery(`${t("resourcesDeleteConfirm")} ${label}?\n\n${t("resourcesDeleteLocalOnlyNotice")}`)
+      ) {
         return false;
       }
       setResourcesDeleteBusy(true);
